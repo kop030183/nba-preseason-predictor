@@ -104,10 +104,10 @@
       ["客場戰績", withRate(a.road), withRate(h.road)],
       ["場均得分", f1(a.off), f1(h.off)],
       ["場均失分", f1(a.def), f1(h.def)],
-      ["PACE（節奏）", f1(a.pace), f1(h.pace)],
-      ["最近 10 場戰績", withRate(a.l10rec), withRate(h.l10rec)],
-      ["最近 10 場得分", f1(a.l10off), f1(h.l10off)],
-      ["最近 10 場失分", f1(a.l10def), f1(h.l10def)]
+      ["PACE", f1(a.pace), f1(h.pace)],
+      ["近 10 場戰績", withRate(a.l10rec), withRate(h.l10rec)],
+      ["近 10 場得分", f1(a.l10off), f1(h.l10off)],
+      ["近 10 場失分", f1(a.l10def), f1(h.l10def)]
     ];
     $("stats-body").innerHTML = rows.map(function (r) {
       return "<tr><td>" + r[1] + "</td><td>" + r[0] + "</td><td>" + r[2] + "</td></tr>";
