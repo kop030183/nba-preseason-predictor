@@ -116,8 +116,18 @@ def main():
             "l10rec": f"{sum(1 for p, o, _ in last10 if p > o)}-{sum(1 for p, o, _ in last10 if p < o)}",
         }
 
+    # 每對球隊的交手比分：key 是兩隊縮寫「依字母排序後用 - 連接」，值依日期排列，
+    # 每場是 [字母序在前那隊得分, 字母序在後那隊得分]
+    h2h = defaultdict(list)
+    for _, vis, vpts, home, hpts in games:
+        a, b = sorted([TEAMS[vis][0], TEAMS[home][0]])
+        first_pts, second_pts = (vpts, hpts) if TEAMS[vis][0] == a else (hpts, vpts)
+        h2h[f"{a}-{b}"].append([first_pts, second_pts])
+    assert len(h2h) == 435, f"對戰組合數不對：{len(h2h)}"  # C(30,2)
+
     payload = {
         "season": SEASON_LABEL,
+        "h2h": h2h,
         "asOf": games[-1][0].strftime("%Y-%m-%d"),
         "games": len(games),
         "homeAdvantage": 1,

@@ -130,6 +130,13 @@ select:focus-visible, .swap:focus-visible, summary:focus-visible {
 .team.winner .score { color: var(--win); }
 .team:not(.winner) .score { color: var(--muted); }
 .margin { text-align: center; margin: 12px 0 0; color: var(--muted); font-size: .9rem; }
+.h2h {
+  margin-top: 14px; padding-top: 12px;
+  border-top: 1px solid var(--line);
+  text-align: center; font-size: .9rem;
+}
+.h2h-title { font-weight: 600; margin-bottom: 4px; }
+.h2h-game { color: var(--muted); font-variant-numeric: tabular-nums; }
 
 /* 表格 */
 table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }

@@ -95,6 +95,23 @@
     $("board-margin").textContent =
       "預測分差 " + f1(diff) + " 分，總分 " + f1(pace.home + pace.away) + " 分";
 
+    // 上季交手紀錄（以客隊為主視角）
+    var pair = [a.abbr, h.abbr].sort();
+    var meetings = D.h2h[pair[0] + "-" + pair[1]] || [];
+    var awayFirst = a.abbr === pair[0];
+    var awayWins = 0;
+    var lines = meetings.map(function (m) {
+      var ap = awayFirst ? m[0] : m[1];
+      var hp = awayFirst ? m[1] : m[0];
+      if (ap > hp) awayWins++;
+      return '<div class="h2h-game">' + a.zh + " " + ap + "、" + h.zh + " " + hp + "</div>";
+    });
+    $("h2h").innerHTML = meetings.length
+      ? '<div class="h2h-title">上季兩隊對戰 ' + meetings.length + " 場：" + a.zh + " " +
+        awayWins + " 勝 " + (meetings.length - awayWins) + " 敗</div>" + lines.join("")
+      : "";
+    $("h2h").hidden = !meetings.length;
+
     // 數據對照
     $("s-away").textContent = a.zh;
     $("s-home").textContent = h.zh;
