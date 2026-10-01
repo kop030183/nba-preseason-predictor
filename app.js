@@ -57,12 +57,12 @@
     node.id = id;
   }
 
-  // "53-29" -> "53-29（64.6%）"
+  // "53-29" -> 戰績 + 換行顯示勝率 "64.6%"
   function withRate(rec) {
     var p = rec.split("-");
     var w = Number(p[0]);
     var total = w + Number(p[1]);
-    return rec + "（" + (total ? (w / total * 100).toFixed(1) : "0.0") + "%）";
+    return rec + '<span class="rate">' + (total ? (w / total * 100).toFixed(1) : "0.0") + "%</span>";
   }
 
   function winnerOf(p) { return p.home >= p.away ? "home" : "away"; }

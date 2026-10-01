@@ -137,7 +137,8 @@ th, td { padding: 8px 6px; text-align: center; border-bottom: 1px solid var(--li
 th { color: var(--muted); font-weight: 600; font-size: .8rem; }
 tbody tr:last-child td { border-bottom: 0; }
 td:first-child, th:first-child { text-align: left; }
-.stats td:nth-child(2), .stats th:nth-child(2) { color: var(--muted); font-size: .8rem; }
+.stats td:nth-child(2), .stats th:nth-child(2) { color: var(--muted); font-size: .8rem; white-space: nowrap; }
+.rate { display: block; font-size: .78rem; color: var(--muted); }
 .stats td:first-child, .stats th:first-child, .stats td:last-child, .stats th:last-child { text-align: center; }
 
 .foot { text-align: center; color: var(--muted); font-size: .78rem; margin-top: 24px; }
