@@ -99,7 +99,7 @@ select:focus-visible, .swap:focus-visible, summary:focus-visible {
 .card h2 { margin: 0 0 12px; font-size: 1.05rem; }
 
 .board-title {
-  display: flex; justify-content: space-between; align-items: center;
+  display: flex; justify-content: center; align-items: center;
   font-size: .85rem; color: var(--muted); margin-bottom: 12px;
 }
 .tag {
