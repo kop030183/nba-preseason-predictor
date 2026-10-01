@@ -57,6 +57,14 @@
     node.id = id;
   }
 
+  // "53-29" -> "53-29（64.6%）"
+  function withRate(rec) {
+    var p = rec.split("-");
+    var w = Number(p[0]);
+    var total = w + Number(p[1]);
+    return rec + "（" + (total ? (w / total * 100).toFixed(1) : "0.0") + "%）";
+  }
+
   function winnerOf(p) { return p.home >= p.away ? "home" : "away"; }
 
   function render() {
@@ -91,15 +99,15 @@
     $("s-away").textContent = a.zh;
     $("s-home").textContent = h.zh;
     var rows = [
-      ["整季戰績", a.w + "-" + a.l, h.w + "-" + h.l],
-      ["主場戰績", a.home, h.home],
-      ["客場戰績", a.road, h.road],
+      ["整季戰績", withRate(a.w + "-" + a.l), withRate(h.w + "-" + h.l)],
+      ["主場戰績", withRate(a.home), withRate(h.home)],
+      ["客場戰績", withRate(a.road), withRate(h.road)],
       ["場均得分", f1(a.off), f1(h.off)],
       ["場均失分", f1(a.def), f1(h.def)],
       ["PACE（節奏）", f1(a.pace), f1(h.pace)],
-      ["最後 10 場戰績", a.l10rec, h.l10rec],
-      ["最後 10 場得分", f1(a.l10off), f1(h.l10off)],
-      ["最後 10 場失分", f1(a.l10def), f1(h.l10def)]
+      ["最近 10 場戰績", withRate(a.l10rec), withRate(h.l10rec)],
+      ["最近 10 場得分", f1(a.l10off), f1(h.l10off)],
+      ["最近 10 場失分", f1(a.l10def), f1(h.l10def)]
     ];
     $("stats-body").innerHTML = rows.map(function (r) {
       return "<tr><td>" + r[1] + "</td><td>" + r[0] + "</td><td>" + r[2] + "</td></tr>";

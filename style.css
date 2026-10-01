@@ -40,7 +40,7 @@ body {
   padding: 24px 16px 48px;
 }
 
-.hero h1 { margin: 0 0 4px; font-size: 1.7rem; letter-spacing: .02em; }
+.hero h1 { margin: 0 0 16px; font-size: 1.7rem; letter-spacing: .02em; }
 .sub { margin: 0 0 16px; color: var(--muted); }
 
 .notice {
