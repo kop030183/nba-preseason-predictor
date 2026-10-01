@@ -105,7 +105,7 @@
       ["場均得分", f1(a.off), f1(h.off)],
       ["場均失分", f1(a.def), f1(h.def)],
       ["PACE", f1(a.pace), f1(h.pace)],
-      ["近 10 場戰績", withRate(a.l10rec), withRate(h.l10rec)],
+      ["近 10 場戰績", a.l10rec, h.l10rec],
       ["近 10 場得分", f1(a.l10off), f1(h.l10off)],
       ["近 10 場失分", f1(a.l10def), f1(h.l10def)]
     ];
