@@ -1,0 +1,30 @@
+Oklahoma City Thunder|99.3
+San Antonio Spurs|99.9
+Detroit Pistons|99.3
+Boston Celtics|94.8
+New York Knicks|96.8
+Houston Rockets|96.1
+Denver Nuggets|98.4
+Charlotte Hornets|96.8
+Cleveland Cavaliers|99.9
+Minnesota Timberwolves|100.5
+Toronto Raptors|98.4
+Atlanta Hawks|101.7
+Miami Heat|103.4
+Los Angeles Lakers|98.3
+Phoenix Suns|97.2
+Los Angeles Clippers|96.5
+Orlando Magic|100.0
+Philadelphia 76ers|99.4
+Portland Trail Blazers|100.5
+Golden State Warriors|99.0
+New Orleans Pelicans|100.3
+Chicago Bulls|102.5
+Dallas Mavericks|101.7
+Memphis Grizzlies|101.3
+Milwaukee Bucks|97.6
+Indiana Pacers|101.0
+Utah Jazz|102.3
+Sacramento Kings|99.2
+Brooklyn Nets|97.1
+Washington Wizards|101.4

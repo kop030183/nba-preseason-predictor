@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NBA 賽季前對戰預測</title>
+  <meta name="description" content="用 2025-26 例行賽數據，預測任意兩支 NBA 球隊對戰的比分與勝負。">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <main class="wrap">
+
+    <header class="hero">
+      <h1>NBA 賽季前對戰預測</h1>
+      <p class="sub">選兩支球隊，看看用上一季的表現推算，這場會打成什麼比分。</p>
+    </header>
+
+    <aside class="notice" role="note">
+      <strong>資料說明：</strong>目前使用 <span id="season-label">2025-26</span> 例行賽的數據（凍結在
+      <span id="asof-label"></span>），當作 2026-27 開季前的預測，所以準確度有限。新球季開打後，數據會更新。
+    </aside>
+
+    <section class="picker" aria-label="選擇球隊">
+      <div class="side">
+        <label for="away">客隊（作客）</label>
+        <select id="away"></select>
+      </div>
+      <button id="swap" type="button" class="swap" aria-label="交換主客場" title="交換主客場">⇄</button>
+      <div class="side">
+        <label for="home">主隊（主場）</label>
+        <select id="home"></select>
+      </div>
+    </section>
+
+    <p id="hint" class="hint" role="alert" hidden></p>
+
+    <section id="result" class="result" aria-live="polite" hidden>
+
+      <div class="card board">
+        <div class="board-title">
+          <span>主推：PACE 調整法</span>
+          <span class="tag" id="verdict-tag"></span>
+        </div>
+        <div class="board-row">
+          <div class="team" id="board-away"></div>
+          <div class="vs">@</div>
+          <div class="team" id="board-home"></div>
+        </div>
+        <p class="margin" id="board-margin"></p>
+      </div>
+
+      <div class="card">
+        <h2>上季數據對照</h2>
+        <table class="stats">
+          <thead>
+            <tr><th id="s-away"></th><th>指標</th><th id="s-home"></th></tr>
+          </thead>
+          <tbody id="stats-body"></tbody>
+        </table>
+      </div>
+
+    </section>
+
+    <footer class="foot">
+      <p>數據來源：NBA.com（PACE）、ESPN（賽程比分），整理自 2025-26 例行賽 1,230 場。僅供學習與興趣參考。</p>
+    </footer>
+
+  </main>
+
+  <script src="data/teams.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
