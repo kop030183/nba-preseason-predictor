@@ -149,8 +149,8 @@
 
   fillSelect(awaySel);
   fillSelect(homeSel);
-  awaySel.value = "New York Knicks";
-  homeSel.value = "San Antonio Spurs";
+  awaySel.value = "Philadelphia 76ers";
+  homeSel.value = "New York Knicks";
 
   awaySel.addEventListener("change", render);
   homeSel.addEventListener("change", render);
