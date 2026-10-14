@@ -5,18 +5,23 @@
 資料是「凍結快照」：只含 2025-26 例行賽(前1230場，不含季後賽)，不會即時更新。
 2026-27 開打後，把 raw/ 換成新球季的檔案、改下面 SEASON_LABEL，重跑一次即可。
 
+兩種模式（改下面的 SEASON_COMPLETE，或執行時加 --complete / --in-progress 臨時覆蓋）：
+- 整季完成：嚴格檢查 1230 場、每隊 82 場、435 組對戰，網頁 mode = "preseason"（拿整季數據當下一季的賽季前預測）
+- 進行中：改檢查每隊場數 <= 82、主客場各 <= 41、沒有重複比賽、沒有未來日期，網頁 mode = "in_season"
+
 執行：python build_data.py
 """
+import argparse
 import json
-from datetime import datetime
+import sys
+from datetime import date, datetime
 from pathlib import Path
 from collections import defaultdict
 
 ROOT = Path(__file__).parent
 RAW = ROOT / "raw"
 SEASON_LABEL = "2025-26"
-# 網頁文字模式："preseason" = 拿這一季整季數據當下一季的賽季前預測；"in_season" = 球季進行中
-SITE_MODE = "preseason"
+SEASON_COMPLETE = True  # True = 整季已打完；False = 球季進行中
 GAME_FILES = ["games_2025-26_oct.txt", "games_2025-26_nov_to_june.txt"]
 PACE_FILE = "pace_2025-26.txt"
 REGULAR_SEASON_GAMES = 1230  # 30隊 x 82場 / 2
@@ -65,10 +70,10 @@ def next_season_label(label):
     return f"{start}-{(start + 1) % 100:02d}"
 
 
-def load_games():
+def load_games(raw_dir):
     games = []
     for name in GAME_FILES:
-        for line in (RAW / name).read_text(encoding="utf-8").splitlines():
+        for line in (raw_dir / name).read_text(encoding="utf-8").splitlines():
             line = line.strip()
             if not line or line.startswith("##"):
                 continue
@@ -79,28 +84,60 @@ def load_games():
     return [g for g in games if g[0] <= REGULAR_SEASON_END and g not in EXCLUDED_GAMES]
 
 
-def load_pace():
+def load_pace(raw_dir):
     pace = {}
-    for line in (RAW / PACE_FILE).read_text(encoding="utf-8").splitlines():
+    for line in (raw_dir / PACE_FILE).read_text(encoding="utf-8").splitlines():
         if line.strip():
             team, p = line.strip().split("|")
             pace[team] = float(p)
     return pace
 
 
-def main():
-    games = load_games()
-    pace = load_pace()
-    assert len(games) == REGULAR_SEASON_GAMES, f"賽程筆數不對：{len(games)}"
+def check_no_duplicates_or_future(games, today):
+    """兩種模式都檢查：沒有重複比賽、沒有未來日期。"""
+    seen = set()
+    for d, vis, _, home, _ in games:
+        key = (d, vis, home)
+        assert key not in seen, f"重複的比賽：{d:%Y-%m-%d} {vis} @ {home}"
+        seen.add(key)
+        assert d.date() <= today, f"未來日期的比賽：{d:%Y-%m-%d} {vis} @ {home}（今天是 {today}）"
+
+
+def check_in_progress_limits(games):
+    """只在進行中模式檢查：每隊場數 <= 82、主客場各 <= 41。
+
+    整季完成模式不能檢查「主客場各 <= 41」：NBA 盃淘汰賽（中立場地）會讓真實的整季資料出現
+    42/40 的主客場失衡（2025-26 的尼克、馬刺、雷霆、魔術都是），整季完成模式改靠「每隊剛好 82 場」把關。
+    """
+    home_n, road_n = defaultdict(int), defaultdict(int)
+    for _, vis, _, home, _ in games:
+        road_n[vis] += 1
+        home_n[home] += 1
+    too_many = {t: (home_n[t], road_n[t]) for t in TEAMS
+                if home_n[t] + road_n[t] > 82 or home_n[t] > 41 or road_n[t] > 41}
+    assert not too_many, (f"有球隊場次超過上限（主場, 客場；總場數<=82、主客場各<=41）：{too_many}。"
+                          "若球季已接近尾聲（NBA 盃中立場地賽可能讓主客場變成 42/40），請改用 --complete")
+
+
+def main(raw_dir, target, complete):
+    games = load_games(raw_dir)
+    pace = load_pace(raw_dir)
+    assert games, "沒有任何比賽資料"
     assert set(pace) == set(TEAMS), f"PACE隊名對不上：{set(pace) ^ set(TEAMS)}"
+    check_no_duplicates_or_future(games, date.today())
+    if complete:
+        assert len(games) == REGULAR_SEASON_GAMES, f"賽程筆數不對：{len(games)}"
+    else:
+        check_in_progress_limits(games)
 
     log = defaultdict(list)  # 隊 -> [(得分, 失分, 是否主場)]，依日期排序
     for _, vis, vpts, home, hpts in games:
         log[vis].append((vpts, hpts, False))
         log[home].append((hpts, vpts, True))
 
-    bad = {k: len(v) for k, v in log.items() if len(v) != 82}
-    assert not bad, f"有球隊場次不是82場：{bad}"
+    if complete:
+        bad = {k: len(v) for k, v in log.items() if len(v) != 82}
+        assert not bad, f"有球隊場次不是82場：{bad}"
 
     out = {}
     for en, (abbr, zh, conf, color) in TEAMS.items():
@@ -131,26 +168,37 @@ def main():
         a, b = sorted([TEAMS[vis][0], TEAMS[home][0]])
         first_pts, second_pts = (vpts, hpts) if TEAMS[vis][0] == a else (hpts, vpts)
         h2h[f"{a}-{b}"].append([first_pts, second_pts])
-    assert len(h2h) == 435, f"對戰組合數不對：{len(h2h)}"  # C(30,2)
+    if complete:
+        assert len(h2h) == 435, f"對戰組合數不對：{len(h2h)}"  # C(30,2)
 
     payload = {
         "season": SEASON_LABEL,
         "nextSeason": next_season_label(SEASON_LABEL),
-        "mode": SITE_MODE,
+        "mode": "preseason" if complete else "in_season",
         "h2h": h2h,
         "asOf": games[-1][0].strftime("%Y-%m-%d"),
         "games": len(games),
         "homeAdvantage": 1,
         "teams": out,
     }
-    target = ROOT / "data" / "teams.js"
+    target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
         "// 由 build_data.py 自動產生，請勿手改\nwindow.NBA_DATA = "
         + json.dumps(payload, ensure_ascii=False, indent=1) + ";\n",
         encoding="utf-8",
     )
-    print(f"完成：{len(out)} 隊，例行賽 {len(games)} 場，最後一場 {payload['asOf']} -> {target}")
+    print(f"完成（{'整季完成' if complete else '進行中'}模式）：{len(out)} 隊，例行賽 {len(games)} 場，"
+          f"最後一場 {payload['asOf']} -> {target}")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser(description="把 raw/ 的原始比分整理成 data/teams.js")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--complete", dest="complete", action="store_true", default=None,
+                      help="當作整季已打完（嚴格檢查 1230 / 82 / 435）")
+    mode.add_argument("--in-progress", dest="complete", action="store_false",
+                      help="當作球季進行中（只檢查上限、重複、未來日期）")
+    parser.add_argument("--raw-dir", type=Path, default=RAW, help="原始資料資料夾（預設 raw/）")
+    parser.add_argument("--out", type=Path, default=ROOT / "data" / "teams.js", help="輸出檔（預設 data/teams.js）")
+    args = parser.parse_args()
+    main(args.raw_dir, args.out, SEASON_COMPLETE if args.complete is None else args.complete)
