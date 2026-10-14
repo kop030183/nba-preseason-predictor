@@ -97,7 +97,8 @@ def load_games(raw_dir):
 
     excluded = [g for g in games if (g[0], g[1], g[3]) in EXCLUDED_GAMES]
     # 資料已經涵蓋到排除日期、那場卻沒排到 -> 多半是日期或隊名設錯，直接報錯，不要默默算進例行賽
-    last_date = max(g[0] for g in games) if games else None
+    # （「涵蓋到」只算今天以前的比賽；未來日期的資料另外由 check_no_duplicates_or_future 報錯）
+    last_date = max((g[0] for g in games if g[0].date() <= date.today()), default=None)
     hit = {(g[0], g[1], g[3]) for g in excluded}
     missed = sorted(k for k in EXCLUDED_GAMES if last_date and k[0] <= last_date and k not in hit)
     assert not missed, "EXCLUDED_GAMES 設定了卻在資料裡找不到（日期, 客隊, 主隊）：" + str(
