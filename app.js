@@ -9,6 +9,32 @@
   var awaySel = $("away");
   var homeSel = $("home");
 
+  // ---------- 依資料模式切換的文字 ----------
+  // D.mode："preseason" = 拿上一季整季數據當賽季前預測；"in_season" = 球季進行中，用本季已打的比賽
+  var MODE = D.mode === "in_season" ? "in_season" : "preseason";
+  var N_GAMES = D.games.toLocaleString("en-US");
+  var COPY = {
+    preseason: {
+      title: "NBA 賽季前對戰預測",
+      notice: "目前使用 " + D.season + " 例行賽的數據（凍結在 " + D.asOf + "），當作 " + D.nextSeason +
+        " 開季前的預測，所以準確度有限：賽季前預估的勝負命中率約 60%。" +
+        "（66.5% 是賽季中、用本季累積數據的回測數字，不適用於賽季前預測。）新球季開打後，數據會更新。",
+      statsTitle: "上季數據對照",
+      l10note: "上季季末",
+      h2hTitle: "上季兩隊對戰 ",
+      foot: "整理自 " + D.season + " 例行賽 " + N_GAMES + " 場"
+    },
+    in_season: {
+      title: "NBA 對戰預測",
+      notice: "目前使用 " + D.season + " 例行賽已完成的 " + N_GAMES + " 場比賽數據（更新至 " + D.asOf +
+        "）。賽季初期樣本少，預測波動較大。",
+      statsTitle: D.season + " 本季數據對照",
+      l10note: "",
+      h2hTitle: D.season + " 例行賽兩隊對戰 ",
+      foot: "整理自 " + D.season + " 例行賽已完成的 " + N_GAMES + " 場（更新至 " + D.asOf + "）"
+    }
+  }[MODE];
+
   // ---------- 預測公式（與舊專案 api.py 完全一致） ----------
   function predictPace(a, h) {
     var avg = (a.pace + h.pace) / 2;
@@ -117,7 +143,7 @@
       return '<div class="h2h-game">' + a.zh + " " + ap + "、" + h.zh + " " + hp + "</div>";
     });
     $("h2h").innerHTML = meetings.length
-      ? '<div class="h2h-title">上季兩隊對戰 ' + meetings.length + " 場：" + a.zh + " " +
+      ? '<div class="h2h-title">' + COPY.h2hTitle + meetings.length + " 場：" + a.zh + " " +
         awayWins + " 勝 " + (meetings.length - awayWins) + " 敗</div>" + lines.join("")
       : "";
     $("h2h").hidden = !meetings.length;
@@ -125,7 +151,7 @@
     // 數據對照
     $("s-away").textContent = a.zh;
     $("s-home").textContent = h.zh;
-    var l10note = '<span class="row-note">上季季末</span>';
+    var l10note = COPY.l10note ? '<span class="row-note">' + COPY.l10note + "</span>" : "";
     var rows = [
       ["整季戰績", withRate(a.w + "-" + a.l), withRate(h.w + "-" + h.l)],
       ["主場戰績", withRate(a.home), withRate(h.home)],
@@ -145,8 +171,14 @@
   }
 
   // ---------- 初始化 ----------
-  $("season-label").textContent = D.season;
-  $("asof-label").textContent = D.asOf;
+  document.title = COPY.title;
+  $("page-title").textContent = COPY.title;
+  var noticeStrong = document.createElement("strong");
+  noticeStrong.textContent = "資料說明：";
+  $("notice").appendChild(noticeStrong);
+  $("notice").appendChild(document.createTextNode(COPY.notice));
+  $("stats-title").textContent = COPY.statsTitle;
+  $("foot-text").textContent = "數據來源：Basketball-Reference.com，" + COPY.foot + "。僅供興趣參考。";
 
   fillSelect(awaySel);
   fillSelect(homeSel);

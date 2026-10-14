@@ -15,6 +15,8 @@ from collections import defaultdict
 ROOT = Path(__file__).parent
 RAW = ROOT / "raw"
 SEASON_LABEL = "2025-26"
+# 網頁文字模式："preseason" = 拿這一季整季數據當下一季的賽季前預測；"in_season" = 球季進行中
+SITE_MODE = "preseason"
 GAME_FILES = ["games_2025-26_oct.txt", "games_2025-26_nov_to_june.txt"]
 PACE_FILE = "pace_2025-26.txt"
 REGULAR_SEASON_GAMES = 1230  # 30隊 x 82場 / 2
@@ -55,6 +57,12 @@ TEAMS = {
     "Utah Jazz": ("UTA", "爵士", "W", "#F9A01B"),
     "Washington Wizards": ("WAS", "巫師", "E", "#002B5C"),
 }
+
+
+def next_season_label(label):
+    """'2025-26' -> '2026-27'"""
+    start = int(label[:4]) + 1
+    return f"{start}-{(start + 1) % 100:02d}"
 
 
 def load_games():
@@ -127,6 +135,8 @@ def main():
 
     payload = {
         "season": SEASON_LABEL,
+        "nextSeason": next_season_label(SEASON_LABEL),
+        "mode": SITE_MODE,
         "h2h": h2h,
         "asOf": games[-1][0].strftime("%Y-%m-%d"),
         "games": len(games),

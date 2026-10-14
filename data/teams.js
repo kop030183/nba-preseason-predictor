@@ -1,6 +1,8 @@
 // 由 build_data.py 自動產生，請勿手改
 window.NBA_DATA = {
  "season": "2025-26",
+ "nextSeason": "2026-27",
+ "mode": "preseason",
  "h2h": {
   "HOU-OKC": [
    [
