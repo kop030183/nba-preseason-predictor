@@ -40,11 +40,21 @@
   // ---------- 畫面 ----------
   function f1(n) { return n.toFixed(1); }
 
+  // 隊徽文字色：白字對比（WCAG 相對亮度公式）不到 4.5 就改黑字
+  function badgeTextColor(hex) {
+    var c = [1, 3, 5].map(function (i) {
+      var v = parseInt(hex.substr(i, 2), 16) / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    var lum = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+    return 1.05 / (lum + 0.05) >= 4.5 ? "#fff" : "#000";
+  }
+
   function teamBlock(t, role, score, isWinner) {
     var el = document.createElement("div");
     el.className = "team" + (isWinner ? " winner" : "");
     el.innerHTML =
-      '<span class="badge" style="background:' + t.color + '">' + t.abbr + "</span>" +
+      '<span class="badge" style="background:' + t.color + ";color:" + badgeTextColor(t.color) + '">' + t.abbr + "</span>" +
       '<div class="name">' + t.zh + "</div>" +
       '<div class="role">' + role + "</div>" +
       '<div class="score">' + f1(score) + "</div>";
