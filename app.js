@@ -115,10 +115,17 @@
       result.hidden = true;
       return;
     }
-    hint.hidden = true;
-
     var a = T[aKey];
     var h = T[hKey];
+    var noGames = [a, h].filter(function (t) { return !t.gp; }).map(function (t) { return t.zh; });
+    if (noGames.length) {
+      hint.textContent = noGames.join("、") + " 本季尚未出賽，暫時無法預測。";
+      hint.hidden = false;
+      result.hidden = true;
+      return;
+    }
+    hint.hidden = true;
+
     var pace = predictPace(a, h);
     var wPace = winnerOf(pace);
 

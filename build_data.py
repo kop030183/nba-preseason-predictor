@@ -144,6 +144,7 @@ def main(raw_dir, target, complete):
         g = log[en]
         n = len(g)
         last10 = g[-10:]
+        n10 = len(last10)  # 球隊還沒打滿 10 場時，分母是實際場數
         wins = sum(1 for p, o, _ in g if p > o)
         hw = sum(1 for p, o, h in g if h and p > o)
         hn = sum(1 for _, _, h in g if h)
@@ -154,10 +155,11 @@ def main(raw_dir, target, complete):
             "gp": n, "w": wins, "l": n - wins,
             "home": f"{hw}-{hn - hw}", "road": f"{rw}-{rn - rw}",
             "pace": pace[en],
-            "off": round(sum(p for p, _, _ in g) / n, 1),
-            "def": round(sum(o for _, o, _ in g) / n, 1),
-            "l10off": round(sum(p for p, _, _ in last10) / 10, 1),
-            "l10def": round(sum(o for _, o, _ in last10) / 10, 1),
+            # 本季 0 場的球隊（進行中模式才會有）沒有平均可算，輸出 null，網頁會顯示「尚未出賽」
+            "off": round(sum(p for p, _, _ in g) / n, 1) if n else None,
+            "def": round(sum(o for _, o, _ in g) / n, 1) if n else None,
+            "l10off": round(sum(p for p, _, _ in last10) / n10, 1) if n10 else None,
+            "l10def": round(sum(o for _, o, _ in last10) / n10, 1) if n10 else None,
             "l10rec": f"{sum(1 for p, o, _ in last10 if p > o)}-{sum(1 for p, o, _ in last10 if p < o)}",
         }
 
