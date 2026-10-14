@@ -72,16 +72,27 @@ def next_season_label(label):
     return f"{start}-{(start + 1) % 100:02d}"
 
 
+class RawDataError(ValueError):
+    """原始資料某一行解析失敗；訊息格式「檔名:行號: 原文 (原因)」。"""
+
+
 def load_games(raw_dir):
     games = []
     for name in GAME_FILES:
-        for line in (raw_dir / name).read_text(encoding="utf-8").splitlines():
-            line = line.strip()
+        for lineno, raw_line in enumerate((raw_dir / name).read_text(encoding="utf-8").splitlines(), start=1):
+            line = raw_line.strip()
             if not line or line.startswith("##"):
                 continue
-            date_s, vis, vpts, home, hpts = line.split("|")
-            d = datetime.strptime(date_s.strip(), "%a, %b %d, %Y")
-            games.append((d, vis, int(vpts), home, int(hpts)))
+            try:
+                date_s, vis, vpts, home, hpts = line.split("|")
+                d = datetime.strptime(date_s.strip(), "%a, %b %d, %Y")
+                game = (d, vis, int(vpts), home, int(hpts))
+                unknown = {vis, home} - set(TEAMS)
+                if unknown:
+                    raise ValueError(f"隊名不在 TEAMS 裡：{sorted(unknown)}")
+            except ValueError as e:
+                raise RawDataError(f"{name}:{lineno}: {raw_line!r} ({e})") from None
+            games.append(game)
     games.sort(key=lambda g: g[0])
 
     excluded = [g for g in games if (g[0], g[1], g[3]) in EXCLUDED_GAMES]
@@ -98,10 +109,13 @@ def load_games(raw_dir):
 
 def load_pace(raw_dir):
     pace = {}
-    for line in (raw_dir / PACE_FILE).read_text(encoding="utf-8").splitlines():
-        if line.strip():
-            team, p = line.strip().split("|")
-            pace[team] = float(p)
+    for lineno, raw_line in enumerate((raw_dir / PACE_FILE).read_text(encoding="utf-8").splitlines(), start=1):
+        if raw_line.strip():
+            try:
+                team, p = raw_line.strip().split("|")
+                pace[team] = float(p)
+            except ValueError as e:
+                raise RawDataError(f"{PACE_FILE}:{lineno}: {raw_line!r} ({e})") from None
     return pace
 
 
@@ -215,4 +229,7 @@ if __name__ == "__main__":
     parser.add_argument("--raw-dir", type=Path, default=RAW, help="原始資料資料夾（預設 raw/）")
     parser.add_argument("--out", type=Path, default=ROOT / "data" / "teams.js", help="輸出檔（預設 data/teams.js）")
     args = parser.parse_args()
-    main(args.raw_dir, args.out, SEASON_COMPLETE if args.complete is None else args.complete)
+    try:
+        main(args.raw_dir, args.out, SEASON_COMPLETE if args.complete is None else args.complete)
+    except RawDataError as e:
+        sys.exit(f"原始資料格式錯誤 {e}")
