@@ -38,4 +38,4 @@
 
 ## 資料來源
 
-NBA.com（PACE）、ESPN（賽程比分）。僅供學習與興趣參考。
+[Basketball-Reference.com](https://www.basketball-reference.com/)（逐場賽程比分與球季 PACE）。僅供學習與興趣參考。
