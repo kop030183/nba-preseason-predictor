@@ -41,7 +41,6 @@ body {
 }
 
 .hero h1 { margin: 0 0 16px; font-size: 1.7rem; letter-spacing: .02em; }
-.sub { margin: 0 0 16px; color: var(--muted); }
 
 .notice {
   background: var(--accent-soft);
@@ -70,7 +69,7 @@ select {
   border: 1px solid var(--line);
   border-radius: 10px;
 }
-select:focus-visible, .swap:focus-visible, summary:focus-visible {
+select:focus-visible, .swap:focus-visible {
   outline: 3px solid var(--accent);
   outline-offset: 2px;
 }
