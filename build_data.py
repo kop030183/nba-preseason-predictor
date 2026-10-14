@@ -26,8 +26,10 @@ GAME_FILES = ["games_2025-26_oct.txt", "games_2025-26_nov_to_june.txt"]
 PACE_FILE = "pace_2025-26.txt"
 REGULAR_SEASON_GAMES = 1230  # 30隊 x 82場 / 2
 REGULAR_SEASON_END = datetime(2026, 4, 12)  # 例行賽最後一天，之後是附加賽/季後賽
-# 原始資料混有一場「NBA盃決賽」(不計入例行賽戰績)，要排除：(日期, 客隊, 客隊得分, 主隊, 主隊得分)
-EXCLUDED_GAMES = {(datetime(2025, 12, 16), "San Antonio Spurs", 113, "New York Knicks", 124)}
+# 原始資料混有一場「NBA盃決賽」(不計入例行賽戰績)，要排除：(日期, 客隊, 主隊)
+# 只比對日期和隊伍，不比對比分（決賽打完前不知道比分，資料有一分誤差也不會漏排）。
+# 2026-27 的盃賽決賽在 2026-12-11，兩隊 12/9 準決賽後才知道，到時再加進來。
+EXCLUDED_GAMES = {(datetime(2025, 12, 16), "San Antonio Spurs", "New York Knicks")}
 
 # 英文隊名 -> (縮寫, 中文名, 分區, 代表色)
 TEAMS = {
@@ -81,7 +83,17 @@ def load_games(raw_dir):
             d = datetime.strptime(date_s.strip(), "%a, %b %d, %Y")
             games.append((d, vis, int(vpts), home, int(hpts)))
     games.sort(key=lambda g: g[0])
-    return [g for g in games if g[0] <= REGULAR_SEASON_END and g not in EXCLUDED_GAMES]
+
+    excluded = [g for g in games if (g[0], g[1], g[3]) in EXCLUDED_GAMES]
+    # 資料已經涵蓋到排除日期、那場卻沒排到 -> 多半是日期或隊名設錯，直接報錯，不要默默算進例行賽
+    last_date = max(g[0] for g in games) if games else None
+    hit = {(g[0], g[1], g[3]) for g in excluded}
+    missed = sorted(k for k in EXCLUDED_GAMES if last_date and k[0] <= last_date and k not in hit)
+    assert not missed, "EXCLUDED_GAMES 設定了卻在資料裡找不到（日期, 客隊, 主隊）：" + str(
+        [(f"{d:%Y-%m-%d}", v, h) for d, v, h in missed])
+
+    kept = [g for g in games if g[0] <= REGULAR_SEASON_END and (g[0], g[1], g[3]) not in EXCLUDED_GAMES]
+    return kept, excluded
 
 
 def load_pace(raw_dir):
@@ -120,7 +132,7 @@ def check_in_progress_limits(games):
 
 
 def main(raw_dir, target, complete):
-    games = load_games(raw_dir)
+    games, excluded = load_games(raw_dir)
     pace = load_pace(raw_dir)
     assert games, "沒有任何比賽資料"
     assert set(pace) == set(TEAMS), f"PACE隊名對不上：{set(pace) ^ set(TEAMS)}"
@@ -190,7 +202,7 @@ def main(raw_dir, target, complete):
         encoding="utf-8",
     )
     print(f"完成（{'整季完成' if complete else '進行中'}模式）：{len(out)} 隊，例行賽 {len(games)} 場，"
-          f"最後一場 {payload['asOf']} -> {target}")
+          f"最後一場 {payload['asOf']}，排除 {len(excluded)} 場 -> {target}")
 
 
 if __name__ == "__main__":
