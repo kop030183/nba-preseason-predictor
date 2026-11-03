@@ -268,24 +268,9 @@ def load_prev_season(raw_dir):
     return games, log, h2h
 
 
-def main(raw_dir, target, complete):
-    games, excluded = load_games(raw_dir, GAME_FILES, REGULAR_SEASON_END, EXCLUDED_GAMES)
-    assert games, "沒有任何比賽資料"
-    check_no_duplicates_or_future(games, date.today())
-    if complete:
-        pace = load_pace(raw_dir)
-        assert set(pace) == set(TEAMS), f"PACE隊名對不上：{set(pace) ^ set(TEAMS)}"
-        assert len(games) == REGULAR_SEASON_GAMES, f"賽程筆數不對：{len(games)}"
-    else:
-        pace = season_pace(raw_dir, games)
-        check_in_progress_limits(games)
-
+def team_rows(games, pace, with_model):
+    """每隊的場數、戰績、場均得失分、近10場、PACE（球季進行中另外加預測模型用的淨勝分 net / net10）。"""
     log = build_log(games)
-
-    if complete:
-        bad = {k: len(v) for k, v in log.items() if len(v) != 82}
-        assert not bad, f"有球隊場次不是82場：{bad}"
-
     out = {}
     for en, (abbr, zh, conf, color) in TEAMS.items():
         g = log[en]
@@ -309,9 +294,60 @@ def main(raw_dir, target, complete):
             "l10def": round(sum(o for _, o, _ in last10) / n10, 1) if n10 else None,
             "l10rec": f"{sum(1 for p, o, _ in last10 if p > o)}-{sum(1 for p, o, _ in last10 if p < o)}",
         }
-        if not complete:  # 預測模型要用的淨勝分（整季至今、近10場），多留一位小數（0 場的球隊是 null）
+        if with_model:  # 預測模型要用的淨勝分（整季至今、近10場），多留一位小數（0 場的球隊是 null）
             out[en]["net"] = round(sum(p - o for p, o, _ in g) / n, 2) if n else None
             out[en]["net10"] = round(sum(p - o for p, o, _ in last10) / n10, 2) if n10 else None
+    return out
+
+
+def build_pregame(raw_dir, games, schedule):
+    """「最近一個打過比賽的台灣日期」開打之前的球隊數據，給網頁看那天已完賽比賽的賽前預測用。
+
+    為什麼要另外存一份：網頁上的球隊數據已經包含那天打完的比賽，直接拿來預測等於看過結果才預測。
+    一支球隊一天最多打一場，所以「那天所有比賽之前」的數據，對那天的每一場都是精確的賽前狀態。
+    做法：從賽程找出那天已完賽的比賽，把它們從比賽清單裡拿掉，重新算一次球隊數據（含 PACE、交手紀錄）。
+    """
+    if not schedule:
+        return None
+    finals = [g for g in schedule["games"] if g["s"] == "F" and g["a"] and g["h"]]
+    if not finals:
+        return None
+    pre_date = max(g["d"] for g in finals)  # 台灣日期
+    name_of = {v[0]: k for k, v in TEAMS.items()}
+    today_finals = {(name_of[g["a"]], name_of[g["h"]]) for g in finals if g["d"] == pre_date}
+    pre_day = date.fromisoformat(pre_date)
+    # 原始比分是美東日期，台灣日期通常是它的隔天（偶爾同一天），所以兩天都要看；同一天同一對球隊不會打兩場
+    pre_games = [g for g in games
+                 if not ((g[1], g[3]) in today_finals and g[0].date() in (pre_day, pre_day - timedelta(days=1)))]
+    if not pre_games:
+        return None
+    return {
+        "date": pre_date,
+        "asOf": pre_games[-1][0].strftime("%Y-%m-%d"),
+        "h2h": build_h2h(pre_games),
+        "teams": team_rows(pre_games, season_pace(raw_dir, pre_games), with_model=True),
+    }
+
+
+def main(raw_dir, target, complete):
+    games, excluded = load_games(raw_dir, GAME_FILES, REGULAR_SEASON_END, EXCLUDED_GAMES)
+    assert games, "沒有任何比賽資料"
+    check_no_duplicates_or_future(games, date.today())
+    if complete:
+        pace = load_pace(raw_dir)
+        assert set(pace) == set(TEAMS), f"PACE隊名對不上：{set(pace) ^ set(TEAMS)}"
+        assert len(games) == REGULAR_SEASON_GAMES, f"賽程筆數不對：{len(games)}"
+    else:
+        pace = season_pace(raw_dir, games)
+        check_in_progress_limits(games)
+
+    log = build_log(games)
+
+    if complete:
+        bad = {k: len(v) for k, v in log.items() if len(v) != 82}
+        assert not bad, f"有球隊場次不是82場：{bad}"
+
+    out = team_rows(games, pace, with_model=not complete)
 
     h2h = build_h2h(games)
     if complete:
@@ -327,6 +363,9 @@ def main(raw_dir, target, complete):
         "homeAdvantage": 1,
     }
 
+    # 賽程分頁（只有球季進行中才有；沒有賽程時寫 null，網頁就不會顯示賽程分頁）
+    schedule = None if complete else build_schedule(raw_dir)
+
     # 球季進行中：附上預測模型參數，以及上季交手紀錄（只供顯示，不進預測）
     if not complete:
         payload["model"] = MODEL
@@ -334,6 +373,9 @@ def main(raw_dir, target, complete):
             _, _, prev_h2h = load_prev_season(raw_dir)
             payload["prevSeason"] = PREV_SEASON["label"]
             payload["h2hPrev"] = prev_h2h
+        pre = build_pregame(raw_dir, games, schedule)
+        if pre:
+            payload["pre"] = pre
 
     payload["teams"] = out
     target.parent.mkdir(parents=True, exist_ok=True)
@@ -345,8 +387,6 @@ def main(raw_dir, target, complete):
     print(f"完成（{'整季完成' if complete else '進行中'}模式）：{len(out)} 隊，例行賽 {len(games)} 場，"
           f"最後一場 {payload['asOf']}，排除 {len(excluded)} 場 -> {target}")
 
-    # 賽程分頁（只有球季進行中才有；沒有賽程時寫 null，網頁就不會顯示賽程分頁）
-    schedule = None if complete else build_schedule(raw_dir)
     if not complete and schedule is None:
         print(f"注意：找不到 {raw_dir / SCHEDULE_FILE}，網頁不會有賽程分頁（請執行 python fetch_espn_games.py）")
     schedule_target = target.parent / "schedule.js"

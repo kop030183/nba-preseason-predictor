@@ -17,6 +17,8 @@
   Object.keys(T).forEach(function (k) { ABBR[T[k].abbr] = k; });
   var neutral = false;   // 目前這場是不是中立場地（從賽程點進來才可能是）；中立場地不加主場優勢
   var fromDate = null;   // 從哪一天的賽程點進來的（用來顯示「回到賽程」）
+  var PRE = D.pre || null;  // 最近一個比賽日「開打之前」的球隊數據（build_data.py 產生），給已完賽的比賽看賽前預測
+  var pregame = false;      // 目前是不是在看一場已完賽比賽的賽前預測
 
   // ---------- 依資料模式切換的文字 ----------
   // D.mode："preseason" = 拿上一季整季數據當賽季前預測；"in_season" = 球季進行中，用本季已打的比賽
@@ -232,12 +234,39 @@
     return { p1: p1, p2: p2, w1: winnerOf(p1), w2: winnerOf(p2), same: winnerOf(p1) === winnerOf(p2) };
   }
 
+  // 那天（PRE.date）已完賽、可以看賽前預測的比賽；沒有就回傳 null
+  function findFinal(aAbbr, hAbbr) {
+    if (!SCHEDULE || !PRE) return null;
+    for (var i = 0; i < SCHEDULE.games.length; i++) {
+      var g = SCHEDULE.games[i];
+      if (g.s === "F" && g.d === PRE.date && g.a === aAbbr && g.h === hAbbr) return g;
+    }
+    return null;
+  }
+
+  // 已完賽的比賽：說明「下面是賽前預測」，並對照實際比分、標出兩種算法猜對或猜錯
+  function showPregameBanner(a, h, cmp) {
+    var box = $("pregame");
+    var g = pregame ? findFinal(a.abbr, h.abbr) : null;
+    box.hidden = !g;
+    if (!g) return;
+    var homeWon = g.hs > g.as;
+    var mark = function (w) { return (w === "home") === homeWon ? '<span class="ok">猜對</span>' : '<span class="bad">猜錯</span>'; };
+    box.innerHTML =
+      "<p><strong>這場已經打完（" + fmtDate(g.d) + "）。</strong>下面是賽前預測，用的是這場開打前的數據（更新至 " +
+      fmtDate(PRE.asOf) + "）。</p>" +
+      "<p>實際比分：" + a.zh + " " + g.as + "、" + h.zh + " " + g.hs + " · 實力評分法 " + mark(cmp.w1) +
+      " · 近 10 場 PACE 法 " + mark(cmp.w2) + "</p>";
+  }
+
   function render() {
     var aKey = awaySel.value;
     var hKey = homeSel.value;
     var hint = $("hint");
     var result = $("result");
     $("neutral-note").hidden = !neutral;
+    $("pregame").hidden = true;  // 需要時下面再顯示
+    var src = pregame && PRE ? PRE.teams : T;  // 看已完賽比賽的賽前預測時，整頁都用賽前數據
 
     if (aKey === hKey) {
       hint.textContent = "客隊和主隊不能是同一支球隊，請重新選擇。";
@@ -245,8 +274,8 @@
       result.hidden = true;
       return;
     }
-    var a = T[aKey];
-    var h = T[hKey];
+    var a = src[aKey];
+    var h = src[hKey];
     // 本季 0 場的球隊沒有任何數據可算（球季進行中才會發生）
     var noGames = [a, h].filter(function (t) { return !t.gp; }).map(function (t) { return t.zh; });
     if (noGames.length) {
@@ -258,6 +287,7 @@
     hint.hidden = true;
 
     var cmp = MODEL ? compareModels(a, h, neutral) : null;
+    if (cmp) showPregameBanner(a, h, cmp);
     var pace = MODEL ? cmp.p1 : predictPace(a, h, neutral ? 0 : null);
     var wPace = winnerOf(pace);
 
@@ -288,7 +318,7 @@
     }
 
     // 交手紀錄（以客隊為主視角）；球季進行中除了本季，還附上上季的交手（只供參考，不進預測）
-    var blocks = [h2hBlock(D.h2h, COPY.h2hTitle, a, h)];
+    var blocks = [h2hBlock(pregame && PRE ? PRE.h2h : D.h2h, COPY.h2hTitle, a, h)];
     if (MODEL && D.h2hPrev) blocks.push(h2hBlock(D.h2hPrev, "上季（" + D.prevSeason + "）兩隊對戰 ", a, h));
     blocks = blocks.filter(Boolean);
     $("h2h").innerHTML = blocks.join("");
@@ -400,14 +430,28 @@
     return '<span class="mini-badge" style="background:' + t.color + ";color:" + badgeTextColor(t.color) + '">' + t.abbr + "</span>";
   }
 
-  // 賽程列表的一場比賽。能點的（兩隊都確定、還沒打完）是連結，點了帶到那場的預測
+  // 最近一個比賽日已完賽的比賽：用「開打之前」的數據算賽前預測，對照實際結果；算不出來（球隊還沒有數據）就回傳 null
+  function preGameInfo(g) {
+    if (!PRE || g.s !== "F" || g.d !== PRE.date || !g.a || !g.h) return null;
+    var a = PRE.teams[ABBR[g.a]];
+    var h = PRE.teams[ABBR[g.h]];
+    if (!a.gp || !h.gp) return null;
+    var c = compareModels(a, h, g.n);
+    var homeWon = g.hs > g.as;
+    return { a: a, h: h, c: c, ok1: (c.w1 === "home") === homeWon, ok2: (c.w2 === "home") === homeWon };
+  }
+
+  // 賽程列表的一場比賽。能點的（兩隊都確定，而且還沒打完、或是最近一個比賽日已完賽可看賽前預測）是連結
   function gameItem(g, date) {
     var a = g.a ? T[ABBR[g.a]] : null;
     var h = g.h ? T[ABBR[g.h]] : null;
-    var clickable = !!(a && h) && (g.s === "S" || g.s === "L");
+    var pi = MODEL ? preGameInfo(g) : null;
+    var clickable = !!(a && h) && (g.s === "S" || g.s === "L" || !!pi);
     var el = document.createElement(clickable ? "a" : "div");
     el.className = "game" + (clickable ? "" : " is-static");
-    if (clickable) el.href = hashOf({ tab: "matchup", away: g.a, home: g.h, date: date, neutral: g.n ? "1" : "" });
+    if (clickable) {
+      el.href = hashOf({ tab: "matchup", away: g.a, home: g.h, date: date, neutral: g.n ? "1" : "", pre: g.s === "F" ? "1" : "" });
+    }
 
     var teams = a && h
       ? miniBadge(a) + " " + a.zh + " @ " + h.zh + " " + miniBadge(h)
@@ -419,6 +463,12 @@
     var line = "";
     if (g.s === "F") {
       line = "已完賽：" + (a ? a.zh : "") + " " + g.as + "、" + (h ? h.zh : "") + " " + g.hs;
+      if (pi) {  // 賽前預測 vs 實際結果
+        var win = pi.c.w1 === "home" ? pi.h : pi.a;
+        line += '<br>賽前預測 ' + win.zh + " 勝 " + f1(Math.abs(pi.c.p1.home - pi.c.p1.away)) + " 分：實力評分法 " +
+          (pi.ok1 ? '<span class="ok">猜對</span>' : '<span class="bad">猜錯</span>') + " · 近 10 場 PACE 法 " +
+          (pi.ok2 ? '<span class="ok">猜對</span>' : '<span class="bad">猜錯</span>');
+      }
     } else if (g.s === "X") {
       line = "延期或取消";
     } else if (!(a && h)) {
@@ -497,6 +547,7 @@
       homeSel.value = hk;
     }
     neutral = p.get("neutral") === "1";
+    pregame = p.get("pre") === "1" && !!ak && !!hk && !!findFinal(p.get("away"), p.get("home"));  // 只有真的是那天已完賽的比賽才算
     fromDate = hasUpcoming() && isDate(p.get("date")) ? p.get("date") : null;
     updateBack();
     showTab("matchup");
@@ -506,6 +557,7 @@
   // 使用者自己換球隊：這就不是賽程裡的那一場了
   function onPick() {
     neutral = false;
+    pregame = false;
     fromDate = null;
     updateBack();
     replaceHash({ tab: "matchup", away: T[awaySel.value].abbr, home: T[homeSel.value].abbr });

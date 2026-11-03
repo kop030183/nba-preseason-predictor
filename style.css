@@ -168,6 +168,17 @@ a.game:hover { border-color: var(--accent); }
 .game-pred .differ { color: var(--accent); font-weight: 600; }
 .game-empty { padding: 28px 0; text-align: center; color: var(--muted); }
 .game-empty p { margin: 0 0 12px; }
+.pregame {
+  margin: 0 0 14px; padding: 10px 14px;
+  background: var(--accent-soft);
+  border-left: 4px solid var(--accent);
+  border-radius: 8px;
+  font-size: .9rem;
+}
+.pregame p { margin: 0; }
+.pregame p + p { margin-top: 4px; }
+.ok { color: var(--win); font-weight: 600; }
+.bad { color: var(--accent); font-weight: 600; }
 .back { margin: 0 0 12px; font-size: .9rem; }
 .back a { color: var(--accent); font-weight: 600; text-decoration: none; }
 
