@@ -255,7 +255,7 @@
     box.innerHTML =
       "<p><strong>這場已經打完（" + fmtDate(g.d) + "）。</strong>下面是賽前預測，用的是這場開打前的數據（更新至 " +
       fmtDate(PRE.asOf) + "）。</p>" +
-      "<p>實際比分：" + a.zh + " " + g.as + "、" + h.zh + " " + g.hs + " · 實力評分法 " + mark(cmp.w1) +
+      "<p>實際比分：" + a.zh + " " + g.as + " : " + g.hs + " " + h.zh + " · 實力評分法 " + mark(cmp.w1) +
       " · 近況預測 " + mark(cmp.w2) + "</p>";
   }
 
@@ -482,7 +482,7 @@
 
     var line = "";
     if (g.s === "F") {
-      line = "已完賽：" + (a ? a.zh : "") + " " + g.as + "、" + (h ? h.zh : "") + " " + g.hs;
+      line = "已完賽：" + (a ? a.zh : "") + " " + g.as + " : " + g.hs + " " + (h ? h.zh : "");
       if (pi) {  // 賽前預測（大比分那個算法）vs 實際結果
         var predWin = pi.c.w1 === "home" ? pi.h : pi.a;
         line += "<br>賽前預測比分：" + pi.a.zh + " " + f1(pi.c.p1.away) + " : " + f1(pi.c.p1.home) + " " + pi.h.zh +
