@@ -33,6 +33,19 @@ REGULAR_SEASON_END = datetime(2027, 4, 11)  # 例行賽最後一天，之後是�
 # 盃賽小組賽、八強、四強都算例行賽，不用排除。
 EXCLUDED_GAMES = set()
 
+# 上一季整季資料：球季進行中時，預測要把「上季」和「本季」混合（整季完成模式用不到）。不需要混合就設成 None。
+PREV_SEASON = {
+    "label": "2025-26",
+    "game_files": ["games_2025-26_oct.txt", "games_2025-26_nov_to_june.txt"],
+    "end": datetime(2026, 4, 12),
+    "excluded": {(datetime(2025, 12, 16), "San Antonio Spurs", "New York Knicks")},
+}
+# 混合法參數（依據：Project_NBA_Preseason_review/02 第 7 節的實測，K=10、R=0.6）：
+#   球隊評分 = (本季場數 x 本季淨勝分 + k x r x 上季淨勝分) / (本季場數 + k)
+#   預測分差 = 主隊評分 - 客隊評分 + homeAdv
+# k = 上季數據等於幾場本季比賽的份量；r = 上季強弱往平均拉回後保留的比例；homeAdv = 主場優勢（分）
+BLEND = {"k": 10, "r": 0.6, "homeAdv": 2}
+
 # 英文隊名 -> (縮寫, 中文名, 分區, 代表色)
 TEAMS = {
     "Atlanta Hawks": ("ATL", "老鷹", "E", "#E03A3E"),
@@ -78,9 +91,9 @@ class RawDataError(ValueError):
     """原始資料某一行解析失敗；訊息格式「檔名:行號: 原文 (原因)」。"""
 
 
-def load_games(raw_dir):
+def load_games(raw_dir, game_files, season_end, excluded_games):
     games = []
-    for name in GAME_FILES:
+    for name in game_files:
         for lineno, raw_line in enumerate((raw_dir / name).read_text(encoding="utf-8").splitlines(), start=1):
             line = raw_line.strip()
             if not line or line.startswith("##"):
@@ -97,16 +110,16 @@ def load_games(raw_dir):
             games.append(game)
     games.sort(key=lambda g: g[0])
 
-    excluded = [g for g in games if (g[0], g[1], g[3]) in EXCLUDED_GAMES]
+    excluded = [g for g in games if (g[0], g[1], g[3]) in excluded_games]
     # 資料已經涵蓋到排除日期、那場卻沒排到 -> 多半是日期或隊名設錯，直接報錯，不要默默算進例行賽
     # （「涵蓋到」只算今天以前的比賽；未來日期的資料另外由 check_no_duplicates_or_future 報錯）
     last_date = max((g[0] for g in games if g[0].date() <= date.today()), default=None)
     hit = {(g[0], g[1], g[3]) for g in excluded}
-    missed = sorted(k for k in EXCLUDED_GAMES if last_date and k[0] <= last_date and k not in hit)
+    missed = sorted(k for k in excluded_games if last_date and k[0] <= last_date and k not in hit)
     assert not missed, "EXCLUDED_GAMES 設定了卻在資料裡找不到（日期, 客隊, 主隊）：" + str(
         [(f"{d:%Y-%m-%d}", v, h) for d, v, h in missed])
 
-    kept = [g for g in games if g[0] <= REGULAR_SEASON_END and (g[0], g[1], g[3]) not in EXCLUDED_GAMES]
+    kept = [g for g in games if g[0] <= season_end and (g[0], g[1], g[3]) not in excluded_games]
     return kept, excluded
 
 
@@ -148,8 +161,41 @@ def check_in_progress_limits(games):
                           "若球季已接近尾聲（NBA 盃中立場地賽可能讓主客場變成 42/40），請改用 --complete")
 
 
+def build_log(games):
+    """隊 -> [(得分, 失分, 是否主場)]，依日期排序"""
+    log = defaultdict(list)
+    for _, vis, vpts, home, hpts in games:
+        log[vis].append((vpts, hpts, False))
+        log[home].append((hpts, vpts, True))
+    return log
+
+
+def build_h2h(games):
+    """每對球隊的交手比分：key 是兩隊縮寫「依字母排序後用 - 連接」，值依日期排列，
+    每場是 [字母序在前那隊得分, 字母序在後那隊得分]"""
+    h2h = defaultdict(list)
+    for _, vis, vpts, home, hpts in games:
+        a, b = sorted([TEAMS[vis][0], TEAMS[home][0]])
+        first_pts, second_pts = (vpts, hpts) if TEAMS[vis][0] == a else (hpts, vpts)
+        h2h[f"{a}-{b}"].append([first_pts, second_pts])
+    return h2h
+
+
+def load_prev_season(raw_dir):
+    """讀上一季整季資料（用和「整季完成」模式一樣的嚴格檢查），回傳 (比賽, 逐隊紀錄, 交手比分)。"""
+    games, _ = load_games(raw_dir, PREV_SEASON["game_files"], PREV_SEASON["end"], PREV_SEASON["excluded"])
+    check_no_duplicates_or_future(games, date.today())
+    assert len(games) == REGULAR_SEASON_GAMES, f"上季（{PREV_SEASON['label']}）賽程筆數不對：{len(games)}"
+    log = build_log(games)
+    bad = {k: len(v) for k, v in log.items() if len(v) != 82}
+    assert not bad, f"上季（{PREV_SEASON['label']}）有球隊場次不是82場：{bad}"
+    h2h = build_h2h(games)
+    assert len(h2h) == 435, f"上季對戰組合數不對：{len(h2h)}"
+    return games, log, h2h
+
+
 def main(raw_dir, target, complete):
-    games, excluded = load_games(raw_dir)
+    games, excluded = load_games(raw_dir, GAME_FILES, REGULAR_SEASON_END, EXCLUDED_GAMES)
     pace = load_pace(raw_dir)
     assert games, "沒有任何比賽資料"
     assert set(pace) == set(TEAMS), f"PACE隊名對不上：{set(pace) ^ set(TEAMS)}"
@@ -159,10 +205,7 @@ def main(raw_dir, target, complete):
     else:
         check_in_progress_limits(games)
 
-    log = defaultdict(list)  # 隊 -> [(得分, 失分, 是否主場)]，依日期排序
-    for _, vis, vpts, home, hpts in games:
-        log[vis].append((vpts, hpts, False))
-        log[home].append((hpts, vpts, True))
+    log = build_log(games)
 
     if complete:
         bad = {k: len(v) for k, v in log.items() if len(v) != 82}
@@ -192,13 +235,7 @@ def main(raw_dir, target, complete):
             "l10rec": f"{sum(1 for p, o, _ in last10 if p > o)}-{sum(1 for p, o, _ in last10 if p < o)}",
         }
 
-    # 每對球隊的交手比分：key 是兩隊縮寫「依字母排序後用 - 連接」，值依日期排列，
-    # 每場是 [字母序在前那隊得分, 字母序在後那隊得分]
-    h2h = defaultdict(list)
-    for _, vis, vpts, home, hpts in games:
-        a, b = sorted([TEAMS[vis][0], TEAMS[home][0]])
-        first_pts, second_pts = (vpts, hpts) if TEAMS[vis][0] == a else (hpts, vpts)
-        h2h[f"{a}-{b}"].append([first_pts, second_pts])
+    h2h = build_h2h(games)
     if complete:
         assert len(h2h) == 435, f"對戰組合數不對：{len(h2h)}"  # C(30,2)
 
@@ -210,8 +247,26 @@ def main(raw_dir, target, complete):
         "asOf": games[-1][0].strftime("%Y-%m-%d"),
         "games": len(games),
         "homeAdvantage": 1,
-        "teams": out,
     }
+
+    # 球季進行中：附上上一季的整季數據，網頁用混合法預測（整季完成模式不需要）
+    if not complete and PREV_SEASON:
+        _, prev_log, prev_h2h = load_prev_season(raw_dir)
+        for en in TEAMS:
+            g = prev_log[en]
+            n = len(g)
+            out[en]["prev"] = {
+                "gp": n,
+                "w": sum(1 for p, o, _ in g if p > o),
+                "l": sum(1 for p, o, _ in g if p < o),
+                "off": round(sum(p for p, _, _ in g) / n, 2),  # 混合法要用，多留一位小數
+                "def": round(sum(o for _, o, _ in g) / n, 2),
+            }
+        payload["prevSeason"] = PREV_SEASON["label"]
+        payload["blend"] = BLEND
+        payload["h2hPrev"] = prev_h2h
+
+    payload["teams"] = out
     target.parent.mkdir(parents=True, exist_ok=True)
     target.write_text(
         "// 由 build_data.py 自動產生，請勿手改\nwindow.NBA_DATA = "
