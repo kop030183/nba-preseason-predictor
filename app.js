@@ -61,7 +61,7 @@
     };
   }
 
-  // ---------- 第二個分數：近 10 場 PACE 法（球季進行中） ----------
+  // ---------- 近況預測（球季進行中）：用近 10 場的 PACE 法 ----------
   // 和賽季前的 PACE 法同一個公式，只是改用「近 10 場」（不滿 10 場就用已打場數）的得失分，PACE 用本季累積值：
   // 兩隊得失分交叉配對 -> 各除以自己的 PACE（變成每回合得分）-> 乘上預估 PACE（兩隊 PACE 的平均）-> 主隊 +1
   function predictLast10(a, h, ha) {
@@ -256,7 +256,7 @@
       "<p><strong>這場已經打完（" + fmtDate(g.d) + "）。</strong>下面是賽前預測，用的是這場開打前的數據（更新至 " +
       fmtDate(PRE.asOf) + "）。</p>" +
       "<p>實際比分：" + a.zh + " " + g.as + "、" + h.zh + " " + g.hs + " · 實力評分法 " + mark(cmp.w1) +
-      " · 近 10 場 PACE 法 " + mark(cmp.w2) + "</p>";
+      " · 近況預測 " + mark(cmp.w2) + "</p>";
   }
 
   function render() {
@@ -301,7 +301,7 @@
     $("board-margin").hidden = !!MODEL;
     $("board-margin").textContent = "預測分差 " + f1(diff) + " 分，總分 " + f1(pace.home + pace.away) + " 分";
 
-    // 近 10 場 PACE 法（只有球季進行中才有）；兩個算法預測的勝方相同或不同，在比分上方給一句總結
+    // 近況預測（只有球季進行中才有）；兩個算法預測的勝方相同或不同，在比分上方給一句總結
     var alt = $("alt");
     var summary = $("summary");
     alt.hidden = !MODEL;
@@ -311,7 +311,7 @@
       var same = cmp.same;
       var win2 = cmp.w2 === "home" ? h : a;
       alt.innerHTML =
-        '<div class="alt-title">近 10 場 PACE 法</div>' +
+        '<div class="alt-title">近況預測</div>' +
         '<div class="alt-line">' + a.zh + " " + f1(p2.away) + "、" + h.zh + " " + f1(p2.home) +
         "（" + win2.zh + " 勝 " + f1(Math.abs(p2.home - p2.away)) + " 分）</div>";
       summary.className = "summary " + (same ? "agree" : "differ");
@@ -486,7 +486,7 @@
       if (pi) {  // 賽前預測（大比分那個算法）vs 實際結果
         var predWin = pi.c.w1 === "home" ? pi.h : pi.a;
         line += "<br>賽前預測：" + pi.a.zh + " " + f1(pi.c.p1.away) + " 比 " + pi.h.zh + " " + f1(pi.c.p1.home) +
-          "<br>賽前預測勝利：" + predWin.zh + "　" +
+          "<br>賽前預測：" + predWin.zh + "　" +
           (pi.ok1 ? '<span class="ok">預測正確</span>' : '<span class="bad">預測失敗</span>');
       }
     } else if (g.s === "X") {
