@@ -16,6 +16,32 @@
 
     <aside class="notice" id="notice" role="note"></aside>
 
+    <nav class="tabs" id="tabs" aria-label="頁面切換" hidden>
+      <button type="button" class="tab" id="tab-matchup">自選對戰</button>
+      <button type="button" class="tab" id="tab-schedule">賽程</button>
+    </nav>
+
+    <!-- 第二層：選日期，列出那天的賽程，點一場進到那場的預測 -->
+    <section id="view-schedule" class="schedule" aria-label="賽程" hidden>
+      <div class="datebar">
+        <button type="button" id="date-prev" class="icon-btn" aria-label="前一天" title="前一天">◀</button>
+        <input type="date" id="date-input" aria-label="選擇日期（台灣日期）">
+        <button type="button" id="date-next" class="icon-btn" aria-label="後一天" title="後一天">▶</button>
+        <button type="button" id="date-today" class="chip">今天</button>
+      </div>
+      <p class="date-note">日期和開賽時間都是台灣時間，過去的日期不能選。點一場比賽，看那場的預測。</p>
+      <ul class="game-list" id="game-list"></ul>
+      <div class="game-empty" id="game-empty" hidden>
+        <p id="game-empty-text"></p>
+        <button type="button" id="jump-next" class="chip" hidden></button>
+      </div>
+    </section>
+
+    <!-- 第一層：自選兩支球隊 -->
+    <div id="view-matchup">
+
+    <p class="back" id="back" hidden><a id="back-link" href="#">← 回到賽程</a></p>
+
     <section class="picker" aria-label="選擇球隊">
       <div class="side">
         <label for="away">客隊（客場）</label>
@@ -27,6 +53,8 @@
         <select id="home"></select>
       </div>
     </section>
+
+    <p id="neutral-note" class="neutral-note" hidden>中立場地：這場沒有主場，預測不加主場優勢。</p>
 
     <p id="hint" class="hint" role="alert" hidden></p>
 
@@ -59,6 +87,8 @@
 
     </section>
 
+    </div><!-- /view-matchup -->
+
     <footer class="foot">
       <p id="foot-text"></p>
     </footer>
@@ -66,6 +96,7 @@
   </main>
 
   <script src="data/teams.js"></script>
+  <script src="data/schedule.js"></script>
   <script src="app.js"></script>
 </body>
 </html>

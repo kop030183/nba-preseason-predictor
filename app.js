@@ -12,6 +12,12 @@
   // 球季進行中：資料帶有模型參數時，預測只用本季已打的比賽（不用上季表現；參數見 build_data.py 的 MODEL）
   var MODEL = D.mode === "in_season" && D.model ? D.model : null;
 
+  var SCHEDULE = window.NBA_SCHEDULE || null;  // 賽程（球季進行中才有，build_data.py 產生；日期與時間都是台灣時間）
+  var ABBR = {};  // 縮寫 -> 球隊 key；網址和賽程都用縮寫
+  Object.keys(T).forEach(function (k) { ABBR[T[k].abbr] = k; });
+  var neutral = false;   // 目前這場是不是中立場地（從賽程點進來才可能是）；中立場地不加主場優勢
+  var fromDate = null;   // 從哪一天的賽程點進來的（用來顯示「回到賽程」）
+
   // ---------- 依資料模式切換的文字 ----------
   // D.mode："preseason" = 拿上一季整季數據當賽季前預測；"in_season" = 球季進行中，用本季已打的比賽
   var MODE = D.mode === "in_season" ? "in_season" : "preseason";
@@ -44,22 +50,23 @@
   COPY.recLabel = COPY.recLabel || "整季戰績";
 
   // ---------- 預測公式（與舊專案 api.py 完全一致） ----------
-  function predictPace(a, h) {
+  // ha = 主場優勢（分）；不給就用預設，中立場地傳 0
+  function predictPace(a, h, ha) {
     var avg = (a.pace + h.pace) / 2;
     return {
       away: (a.off / a.pace * avg + h.def / h.pace * avg) / 2,
-      home: (h.off / h.pace * avg + a.def / a.pace * avg) / 2 + HOME_ADV
+      home: (h.off / h.pace * avg + a.def / a.pace * avg) / 2 + (ha == null ? HOME_ADV : ha)
     };
   }
 
   // ---------- 第二個分數：近 10 場 PACE 法（球季進行中） ----------
   // 和賽季前的 PACE 法同一個公式，只是改用「近 10 場」（不滿 10 場就用已打場數）的得失分，PACE 用本季累積值：
   // 兩隊得失分交叉配對 -> 各除以自己的 PACE（變成每回合得分）-> 乘上預估 PACE（兩隊 PACE 的平均）-> 主隊 +1
-  function predictLast10(a, h) {
+  function predictLast10(a, h, ha) {
     var avg = (a.pace + h.pace) / 2;
     return {
       away: (a.l10off / a.pace * avg + h.l10def / h.pace * avg) / 2,
-      home: (h.l10off / h.pace * avg + a.l10def / a.pace * avg) / 2 + HOME_ADV
+      home: (h.l10off / h.pace * avg + a.l10def / a.pace * avg) / 2 + (ha == null ? HOME_ADV : ha)
     };
   }
 
@@ -77,12 +84,12 @@
     return (1 - w) * shrunk(t.gp, t.net) + w * shrunk(Math.min(10, t.gp), t.net10);
   }
 
-  function predictSeason(a, h) {
+  function predictSeason(a, h, ha) {
     var w = MODEL.recentWeight;
     var totalSeason = (a.off + h.def) / 2 + (h.off + a.def) / 2;
     var totalRecent = (a.l10off + h.l10def) / 2 + (h.l10off + a.l10def) / 2;
     var total = (1 - w) * totalSeason + w * totalRecent;
-    var margin = rating(h) - rating(a) + MODEL.homeAdv;
+    var margin = rating(h) - rating(a) + (ha == null ? MODEL.homeAdv : ha);
     return { away: total / 2 - margin / 2, home: total / 2 + margin / 2 };
   }
 
@@ -217,11 +224,20 @@
 
   function winnerOf(p) { return p.home >= p.away ? "home" : "away"; }
 
+  // 球季進行中：兩個分數與「兩種模式方向是否一致」（賽程列表和對戰畫面共用）；neutral 時不加主場優勢
+  function compareModels(a, h, isNeutral) {
+    var ha = isNeutral ? 0 : null;
+    var p1 = predictSeason(a, h, ha);
+    var p2 = predictLast10(a, h, ha);
+    return { p1: p1, p2: p2, w1: winnerOf(p1), w2: winnerOf(p2), same: winnerOf(p1) === winnerOf(p2) };
+  }
+
   function render() {
     var aKey = awaySel.value;
     var hKey = homeSel.value;
     var hint = $("hint");
     var result = $("result");
+    $("neutral-note").hidden = !neutral;
 
     if (aKey === hKey) {
       hint.textContent = "客隊和主隊不能是同一支球隊，請重新選擇。";
@@ -241,7 +257,8 @@
     }
     hint.hidden = true;
 
-    var pace = MODEL ? predictSeason(a, h) : predictPace(a, h);
+    var cmp = MODEL ? compareModels(a, h, neutral) : null;
+    var pace = MODEL ? cmp.p1 : predictPace(a, h, neutral ? 0 : null);
     var wPace = winnerOf(pace);
 
     // 主記分板
@@ -259,9 +276,9 @@
     alt.hidden = !MODEL;
     summary.hidden = !MODEL;
     if (MODEL) {
-      var p2 = predictLast10(a, h);
-      var same = winnerOf(p2) === wPace;
-      var win2 = winnerOf(p2) === "home" ? h : a;
+      var p2 = cmp.p2;
+      var same = cmp.same;
+      var win2 = cmp.w2 === "home" ? h : a;
       alt.innerHTML =
         '<div class="alt-title">第二個分數：近 10 場 PACE 法</div>' +
         '<div class="alt-line">' + a.zh + " " + f1(p2.away) + "、" + h.zh + " " + f1(p2.home) +
@@ -329,20 +346,210 @@
   awaySel.value = "Philadelphia 76ers";
   homeSel.value = "New York Knicks";
 
-  awaySel.addEventListener("change", render);
-  homeSel.addEventListener("change", render);
+  // ---------- 網址記住狀態，所以每一場的預測都有自己的連結，也能用瀏覽器的上一頁 ----------
+  //   #tab=matchup&away=PHI&home=NYK[&date=2026-11-05][&neutral=1]    第一層：自選對戰
+  //   #tab=schedule&date=2026-11-05                                   第二層：某天的賽程
+  function readHash() { return new URLSearchParams(location.hash.replace(/^#/, "")); }
+
+  function hashOf(obj) {
+    var p = new URLSearchParams();
+    Object.keys(obj).forEach(function (k) { if (obj[k]) p.set(k, obj[k]); });
+    return "#" + p.toString();
+  }
+
+  function replaceHash(obj) { history.replaceState(null, "", hashOf(obj)); }
+
+  function isDate(s) { return /^\d{4}-\d{2}-\d{2}$/.test(s || ""); }
+
+  // ---------- 第二層：賽程（日期都是台灣日期，過去的日期不能選） ----------
+  var gamesByDate = {};
+  var dates = [];  // 有比賽的台灣日期（由小到大）
+  if (SCHEDULE) {
+    SCHEDULE.games.forEach(function (g) { (gamesByDate[g.d] = gamesByDate[g.d] || []).push(g); });
+    dates = Object.keys(gamesByDate).sort();
+  }
+  var lastDate = dates.length ? dates[dates.length - 1] : null;
+  var curDate = null;
+
+  function todayTW() { return new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(0, 10); }  // 台灣的今天
+
+  function addDays(d, n) {
+    var p = d.split("-").map(Number);
+    return new Date(Date.UTC(p[0], p[1] - 1, p[2] + n)).toISOString().slice(0, 10);
+  }
+
+  function fmtDate(d) {  // "2026-11-05" -> "11/5（四）"
+    var p = d.split("-").map(Number);
+    return p[1] + "/" + p[2] + "（" + "日一二三四五六".charAt(new Date(p[0], p[1] - 1, p[2]).getDay()) + "）";
+  }
+
+  function nextGameDate(from) {  // from 當天或之後，第一個有比賽的日期
+    for (var i = 0; i < dates.length; i++) if (dates[i] >= from) return dates[i];
+    return null;
+  }
+
+  function hasUpcoming() { return !!lastDate && lastDate >= todayTW(); }
+
+  function clampDate(d) {
+    var lo = todayTW();
+    if (!isDate(d)) d = lo;
+    return d < lo ? lo : (d > lastDate ? lastDate : d);
+  }
+
+  function miniBadge(t) {
+    return '<span class="mini-badge" style="background:' + t.color + ";color:" + badgeTextColor(t.color) + '">' + t.abbr + "</span>";
+  }
+
+  // 賽程列表的一場比賽。能點的（兩隊都確定、還沒打完）是連結，點了帶到那場的預測
+  function gameItem(g, date) {
+    var a = g.a ? T[ABBR[g.a]] : null;
+    var h = g.h ? T[ABBR[g.h]] : null;
+    var clickable = !!(a && h) && (g.s === "S" || g.s === "L");
+    var el = document.createElement(clickable ? "a" : "div");
+    el.className = "game" + (clickable ? "" : " is-static");
+    if (clickable) el.href = hashOf({ tab: "matchup", away: g.a, home: g.h, date: date, neutral: g.n ? "1" : "" });
+
+    var teams = a && h
+      ? miniBadge(a) + " " + a.zh + " @ " + h.zh + " " + miniBadge(h)
+      : "待定 @ 待定";
+    var tags = (g.tag ? '<span class="game-tag">' + g.tag + "</span>" : "") +
+      (g.n && a && h ? '<span class="game-tag">中立場地</span>' : "") +
+      (g.s === "L" ? '<span class="game-tag live">進行中</span>' : "");
+
+    var line = "";
+    if (g.s === "F") {
+      line = "已完賽：" + (a ? a.zh : "") + " " + g.as + "、" + (h ? h.zh : "") + " " + g.hs;
+    } else if (g.s === "X") {
+      line = "延期或取消";
+    } else if (!(a && h)) {
+      line = "兩隊要等前一輪打完才決定";
+    } else if (MODEL) {
+      var c = compareModels(a, h, g.n);
+      var win = c.w1 === "home" ? h : a;
+      line = "預測 " + win.zh + " 勝 " + f1(Math.abs(c.p1.home - c.p1.away)) + " 分 · " +
+        '<span class="' + (c.same ? "agree" : "differ") + '">' + (c.same ? "兩種模式方向一致" : "兩種模式方向不一致") + "</span>";
+    }
+
+    el.innerHTML = '<div class="game-top"><span class="game-time">' + g.t + '</span><span class="game-teams">' + teams +
+      "</span>" + tags + "</div>" + (line ? '<div class="game-pred">' + line + "</div>" : "");
+    var li = document.createElement("li");
+    li.appendChild(el);
+    return li;
+  }
+
+  function renderSchedule(date) {
+    curDate = date;
+    var today = todayTW();
+    $("date-input").value = date;
+    $("date-prev").disabled = date <= today;
+    $("date-next").disabled = date >= lastDate;
+    var games = gamesByDate[date] || [];
+    var list = $("game-list");
+    list.innerHTML = "";
+    games.forEach(function (g) { list.appendChild(gameItem(g, date)); });
+    $("game-empty").hidden = games.length > 0;
+    if (!games.length) {
+      $("game-empty-text").textContent = fmtDate(date) + "沒有比賽。";
+      var next = nextGameDate(addDays(date, 1));
+      var jump = $("jump-next");
+      jump.hidden = !next;
+      if (next) {
+        jump.textContent = "跳到下一個比賽日：" + fmtDate(next);
+        jump.onclick = function () { goDate(next); };
+      }
+    }
+  }
+
+  function goDate(d) {  // 使用者在賽程裡換日期：不新增瀏覽紀錄，這樣「上一頁」從對戰畫面會回到對的那一天
+    d = clampDate(d);
+    renderSchedule(d);
+    replaceHash({ tab: "schedule", date: d });
+  }
+
+  function showTab(name) {
+    var sched = name === "schedule";
+    $("view-schedule").hidden = !sched;
+    $("view-matchup").hidden = sched;
+    $("tab-matchup").setAttribute("aria-current", sched ? "false" : "page");
+    $("tab-schedule").setAttribute("aria-current", sched ? "page" : "false");
+  }
+
+  function updateBack() {
+    $("back").hidden = !fromDate;
+    if (fromDate) {
+      $("back-link").textContent = "← 回到 " + fmtDate(fromDate) + "賽程";
+      $("back-link").href = hashOf({ tab: "schedule", date: fromDate });
+    }
+  }
+
+  // 依網址決定要顯示哪一層、哪一場
+  function applyHash() {
+    var p = readHash();
+    if (hasUpcoming() && p.get("tab") === "schedule") {
+      showTab("schedule");
+      renderSchedule(clampDate(p.get("date") || nextGameDate(todayTW()) || lastDate));
+      return;
+    }
+    var ak = ABBR[p.get("away")];
+    var hk = ABBR[p.get("home")];
+    if (ak && hk && ak !== hk) {
+      awaySel.value = ak;
+      homeSel.value = hk;
+    }
+    neutral = p.get("neutral") === "1";
+    fromDate = hasUpcoming() && isDate(p.get("date")) ? p.get("date") : null;
+    updateBack();
+    showTab("matchup");
+    render();
+  }
+
+  // 使用者自己換球隊：這就不是賽程裡的那一場了
+  function onPick() {
+    neutral = false;
+    fromDate = null;
+    updateBack();
+    replaceHash({ tab: "matchup", away: T[awaySel.value].abbr, home: T[homeSel.value].abbr });
+    render();
+  }
+
+  awaySel.addEventListener("change", onPick);
+  homeSel.addEventListener("change", onPick);
+  $("swap").addEventListener("click", function () {
+    var tmp = awaySel.value;
+    awaySel.value = homeSel.value;
+    homeSel.value = tmp;
+    onPick();
+  });
+
   // 使用者切換淺色/深色模式時，隊色要跟著重新調整
   if (window.matchMedia) {
     var darkMq = window.matchMedia("(prefers-color-scheme: dark)");
     if (darkMq.addEventListener) darkMq.addEventListener("change", render);
     else if (darkMq.addListener) darkMq.addListener(render);
   }
-  $("swap").addEventListener("click", function () {
-    var tmp = awaySel.value;
-    awaySel.value = homeSel.value;
-    homeSel.value = tmp;
-    render();
-  });
 
-  render();
+  // 分頁與賽程控制（沒有賽程、或賽程都已過去就不顯示分頁）
+  if (hasUpcoming()) {
+    $("tabs").hidden = false;
+    $("date-input").min = todayTW();
+    $("date-input").max = lastDate;
+    $("tab-matchup").addEventListener("click", function () {
+      location.hash = hashOf({ tab: "matchup", away: T[awaySel.value].abbr, home: T[homeSel.value].abbr });
+    });
+    $("tab-schedule").addEventListener("click", function () {
+      location.hash = hashOf({ tab: "schedule", date: curDate || nextGameDate(todayTW()) || lastDate });
+    });
+    $("date-input").addEventListener("change", function () { goDate($("date-input").value); });
+    $("date-prev").addEventListener("click", function () { goDate(addDays(curDate, -1)); });
+    $("date-next").addEventListener("click", function () { goDate(addDays(curDate, 1)); });
+    $("date-today").addEventListener("click", function () { goDate(todayTW()); });
+  }
+  window.addEventListener("hashchange", applyHash);
+
+  if (location.hash) {
+    applyHash();
+  } else {
+    showTab("matchup");
+    render();
+  }
 })();

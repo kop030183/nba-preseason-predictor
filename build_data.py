@@ -15,7 +15,7 @@
 import argparse
 import json
 import sys
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from pathlib import Path
 from collections import defaultdict
 
@@ -26,6 +26,13 @@ SEASON_COMPLETE = False  # True = 整季已打完；False = 球季進行中
 GAME_FILES = ["games_2026-27.txt"]
 PACE_FILE = "pace_2025-26.txt"  # 只有「整季完成」模式（賽季前預測）用這個檔
 BOX_FILE = "boxscores_2026-27.json"  # 球季進行中：由 fetch_espn_games.py 產生，用來算本季累積 PACE（不用上季的）
+SCHEDULE_FILE = "schedule_2026-27.json"  # 球季進行中：由 fetch_espn_games.py 產生，網頁的賽程分頁用
+# ESPN 的比賽備註 -> 網頁上顯示的標籤
+SCHEDULE_TAGS = {
+    "NBA Cup - Group Play": "NBA 盃小組賽", "NBA Cup - Quarterfinals": "NBA 盃八強", "NBA Cup - Semifinals": "NBA 盃四強",
+    "NBA Cup Championship": "NBA 盃決賽（不計入例行賽戰績）", "NBA Mexico City Game": "墨西哥城例行賽",
+    "NBA Paris Game": "巴黎例行賽", "NBA Manchester Game": "曼徹斯特例行賽",
+}
 REGULAR_SEASON_GAMES = 1230  # 30隊 x 82場 / 2
 REGULAR_SEASON_END = datetime(2027, 4, 11)  # 例行賽最後一天，之後是附加賽/季後賽
 # 原始資料混有一場「NBA盃決賽」(不計入例行賽戰績)，要排除：(日期, 客隊, 主隊)
@@ -177,6 +184,31 @@ def season_pace(raw_dir, games):
     return {t: round(48 * poss[t] / mins[t], 1) if mins[t] else None for t in TEAMS}
 
 
+def build_schedule(raw_dir):
+    """賽程分頁的資料：每場轉成台灣日期與開賽時間（台灣沒有夏令時間，固定 UTC+8）。沒有賽程檔就回傳 None。
+
+    每場：d = 台灣日期、t = 台灣開賽時間、a/h = 客/主隊縮寫（盃賽決賽等還沒決定的是 null）、
+    s = F 已完賽 / S 尚未開打 / L 進行中 / X 延期或取消、n = 中立場地（不加主場優勢）、tag = 備註標籤、as/hs = 已完賽的比分。
+    """
+    path = raw_dir / SCHEDULE_FILE
+    if not path.exists():
+        return None
+    games = []
+    for g in json.loads(path.read_text(encoding="utf-8")):
+        tw = datetime.strptime(g["utc"], "%Y-%m-%dT%H:%MZ") + timedelta(hours=8)
+        status = g["status"]
+        s = "F" if status == "STATUS_FINAL" else "S" if status == "STATUS_SCHEDULED" else \
+            "X" if ("POSTPONED" in status or "CANCELED" in status) else "L"
+        games.append({
+            "d": tw.strftime("%Y-%m-%d"), "t": tw.strftime("%H:%M"),
+            "a": TEAMS[g["away"]][0] if g["away"] else None, "h": TEAMS[g["home"]][0] if g["home"] else None,
+            "s": s, "n": g["neutral"], "tag": SCHEDULE_TAGS.get(g["note"], g["note"]),
+            "as": g["away_pts"], "hs": g["home_pts"],
+        })
+    games.sort(key=lambda x: (x["d"], x["t"], x["a"] or "", x["h"] or ""))
+    return {"season": SEASON_LABEL, "timezone": "Asia/Taipei", "games": games}
+
+
 def check_no_duplicates_or_future(games, today):
     """兩種模式都檢查：沒有重複比賽、沒有未來日期。"""
     seen = set()
@@ -312,6 +344,19 @@ def main(raw_dir, target, complete):
     )
     print(f"完成（{'整季完成' if complete else '進行中'}模式）：{len(out)} 隊，例行賽 {len(games)} 場，"
           f"最後一場 {payload['asOf']}，排除 {len(excluded)} 場 -> {target}")
+
+    # 賽程分頁（只有球季進行中才有；沒有賽程時寫 null，網頁就不會顯示賽程分頁）
+    schedule = None if complete else build_schedule(raw_dir)
+    if not complete and schedule is None:
+        print(f"注意：找不到 {raw_dir / SCHEDULE_FILE}，網頁不會有賽程分頁（請執行 python fetch_espn_games.py）")
+    schedule_target = target.parent / "schedule.js"
+    schedule_target.write_text(
+        "// 由 build_data.py 自動產生，請勿手改\nwindow.NBA_SCHEDULE = "
+        + json.dumps(schedule, ensure_ascii=False, separators=(",", ":")).replace('},{"d"', '},\n{"d"') + ";\n",
+        encoding="utf-8",
+    )
+    if schedule:
+        print(f"賽程：{len(schedule['games'])} 場（台灣時間）-> {schedule_target}")
 
 
 if __name__ == "__main__":

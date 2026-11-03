@@ -34,6 +34,16 @@
 
 K 和主場優勢定義在 `build_data.py` 的 `MODEL`，輸出到 `data/teams.js`，網頁從資料讀取，要調整只改那一處。
 
+## 兩層畫面（球季進行中）
+
+- **第一層「自選對戰」**：自己選客隊、主隊，看預測。
+- **第二層「賽程」**：選一個日期，列出那天已排好的比賽，點一場就帶到那場的預測（兩隊已選好）。
+  - 日期和開賽時間都是**台灣時間**（美國晚上的比賽會是台灣隔天早上）；**過去的日期不能選**，那天沒比賽時會提示並可跳到下一個比賽日。
+  - 每場旁邊顯示預測的勝方、分差，以及「兩種模式方向一致／不一致」。
+  - 中立場地（NBA 盃決賽、墨西哥城／巴黎／曼徹斯特的海外賽）不加主場優勢，畫面會註明；NBA 盃八強、四強、決賽的兩隊還沒決定時顯示「待定」，不能點。已完賽的比賽顯示比分，不能點。
+- 網址會記住畫面（`#tab=schedule&date=2026-11-05`、`#tab=matchup&away=PHI&home=DET`），所以每一場的預測都有自己的連結，可以貼給別人，也能用瀏覽器的「上一頁」從對戰畫面回到賽程。
+- 賽程來自 ESPN（`fetch_espn_games.py` 抓成 `raw/schedule_2026-27.json`，`build_data.py` 轉成台灣時間的 `data/schedule.js`）。賽程是更新資料時的快照；賽程改期、盃賽決賽兩隊確定，都要等下一次更新才會反映。
+
 ## 數據對照表怎麼看
 
 - 兩隊的名稱和數字用各自的隊色（例如七六人藍、尼克橘）。有些隊色在深色或淺色底上看不清楚，網頁會自動把顏色調亮或調暗到對比 ≥ 4.5，色相不變，所以同一隊在深色／淺色模式下顏色深淺會略有不同。
@@ -86,9 +96,10 @@ K 和主場優勢定義在 `build_data.py` 的 `MODEL`，輸出到 `data/teams.j
 | 檔案 | 用途 |
 |---|---|
 | `index.html` / `style.css` / `app.js` | 網頁本體（預測公式在 `app.js`） |
-| `data/teams.js` | 網頁讀取的資料（由 `build_data.py` 產生，請勿手改） |
+| `data/teams.js` | 網頁讀取的球隊資料（由 `build_data.py` 產生，請勿手改） |
+| `data/schedule.js` | 網頁讀取的賽程（台灣時間，由 `build_data.py` 產生，請勿手改；賽季前模式是 `null`） |
 | `build_data.py` | 把 `raw/` 原始比分整理成 `data/teams.js`；設定（賽季、模式、混合法參數）在檔案最上方 |
-| `fetch_espn_games.py` | 從 ESPN 抓本季已完賽的比分（`raw/games_2026-27.txt`）和每場 boxscore（`raw/boxscores_2026-27.json`，算本季 PACE 用；有快取，只抓新比賽） |
+| `fetch_espn_games.py` | 從 ESPN 抓本季已完賽的比分（`raw/games_2026-27.txt`）、每場 boxscore（`raw/boxscores_2026-27.json`，算本季 PACE 用；有快取，只抓新比賽）和整季賽程（`raw/schedule_2026-27.json`，每次整個重抓，約一分鐘） |
 | `raw/` | 原始比分與 PACE（2025-26 來自 Basketball-Reference，2026-27 來自 ESPN）；上季比分只用在顯示上季交手紀錄 |
 
 ## 本機開啟
@@ -97,7 +108,7 @@ K 和主場優勢定義在 `build_data.py` 的 `MODEL`，輸出到 `data/teams.j
 
 ## 滾動更新（球季進行中）
 
-1. `python fetch_espn_games.py`：重新抓 2026-27 開幕夜到今天所有已完賽的比分（整個檔案重寫，不會重複或漏掉），並補抓新比賽的 boxscore（第一次要幾分鐘，之後只抓新打完的）。
+1. `python fetch_espn_games.py`：重新抓 2026-27 開幕夜到今天所有已完賽的比分（整個檔案重寫，不會重複或漏掉），並補抓新比賽的 boxscore（第一次要幾分鐘，之後只抓新打完的），最後重抓整季賽程（約一分鐘；加 `--no-schedule` 可略過）。
 2. `python build_data.py`：整理成 `data/teams.js`，看輸出那行的場數和最後一場日期對不對。
 3. 雙擊 `index.html` 看一下，再 `git commit` / `git push`。
 
