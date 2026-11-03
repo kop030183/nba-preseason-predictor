@@ -141,8 +141,9 @@ select:focus-visible, .swap:focus-visible {
 }
 .alt-title { font-weight: 600; margin-bottom: 4px; }
 .alt-line { font-variant-numeric: tabular-nums; }
-.alt-note { color: var(--muted); font-size: .82rem; margin-top: 4px; }
-.alt-note.differ { color: var(--accent); }
+.summary { text-align: center; margin: -4px 0 12px; font-size: .88rem; font-weight: 600; }
+.summary.agree { color: var(--win); }
+.summary.differ { color: var(--accent); }
 .h2h-block + .h2h-block { margin-top: 10px; }
 .h2h-title { font-weight: 600; margin-bottom: 4px; }
 .h2h-game { color: var(--muted); font-variant-numeric: tabular-nums; }

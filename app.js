@@ -199,9 +199,11 @@
     $("board-margin").textContent = (MODEL ? "實力評分法：" : "") +
       "預測分差 " + f1(diff) + " 分，總分 " + f1(pace.home + pace.away) + " 分";
 
-    // 第二個分數（只有球季進行中才有）：兩個算法預測的勝方相同或不同都標出來
+    // 第二個分數（只有球季進行中才有）；兩個算法預測的勝方相同或不同，在比分上方給一句總結
     var alt = $("alt");
+    var summary = $("summary");
     alt.hidden = !MODEL;
+    summary.hidden = !MODEL;
     if (MODEL) {
       var p2 = predictLast10(a, h);
       var same = winnerOf(p2) === wPace;
@@ -209,9 +211,9 @@
       alt.innerHTML =
         '<div class="alt-title">第二個分數：近 10 場 PACE 法</div>' +
         '<div class="alt-line">' + a.zh + " " + f1(p2.away) + "、" + h.zh + " " + f1(p2.home) +
-        "（" + win2.zh + " 勝 " + f1(Math.abs(p2.home - p2.away)) + " 分）</div>" +
-        '<div class="alt-note' + (same ? "" : " differ") + '">' +
-        (same ? "兩個分數預測的勝方相同。" : "兩個分數預測的勝方不同，這種比賽回測約五五波，可視為勢均力敵。") + "</div>";
+        "（" + win2.zh + " 勝 " + f1(Math.abs(p2.home - p2.away)) + " 分）</div>";
+      summary.className = "summary " + (same ? "agree" : "differ");
+      summary.textContent = same ? "兩種模式預測方向一致 可參考" : "兩種模式預測方向不一致 看看就好";
     }
 
     // 交手紀錄（以客隊為主視角）；球季進行中除了本季，還附上上季的交手（只供參考，不進預測）
