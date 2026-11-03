@@ -32,8 +32,9 @@
       title: "NBA 對戰預測",
       notice: MODEL
         ? "已完成 " + N_GAMES + " 場 " + D.season + " 例行賽（更新至 " + D.asOf + "）。預測只用本季已打的比賽，" +
-          "不使用上季表現（休賽季球員異動大）。兩個分數：① 實力評分法：實力評分 = 淨勝分 × 已打場數 ÷（已打場數 + " +
-          MODEL.shrinkK + "），打得少時往平均拉回；② 近 10 場 PACE 法（不滿 10 場用已打場數）。賽季初期樣本少，預測波動較大。"
+          "不使用上季表現（休賽季球員異動大）。兩個分數：① 實力評分法：整季至今與近 10 場的淨勝分各占一半，" +
+          "各自再依場數往平均拉回（× 場數 ÷（場數 + " + MODEL.shrinkK + "））；② 近 10 場 PACE 法。不滿 10 場都用已打場數。" +
+          "賽季初期樣本少，預測波動較大。"
         : "目前使用 " + D.season + " 例行賽已完成的 " + N_GAMES + " 場比賽數據（更新至 " + D.asOf +
           "）。賽季初期樣本少，預測波動較大。",
       statsTitle: D.season + " 本季數據對照",
@@ -69,13 +70,24 @@
   }
 
   // ---------- 球季進行中的預測（只用本季已打的比賽） ----------
-  // 實力評分 = 已打場數 x 本季淨勝分 / (已打場數 + K)，淨勝分 = 場均得分 - 場均失分（打得少時往平均拉回）
+  // 整季評分 = 已打場數 x 整季至今淨勝分 / (已打場數 + K)，淨勝分 = 場均得分 - 場均失分（打得少時往平均拉回）
+  // 近況評分 = 近 10 場場數 x 近 10 場淨勝分 / (近 10 場場數 + K)，不滿 10 場就用已打場數
+  // 球隊評分 = 整季評分和近況評分按 recentWeight 混合（目前各占一半）
   // 預測分差 = 主隊評分 - 客隊評分 + 主場優勢（完整分差，不像 PACE 法把分差砍半，所以主場是 2 分不是 1 分）
-  // 預測總分 = 兩隊本季場均得失分直接平均（不用 PACE）；再用 主隊 = 總分/2 + 分差/2 拆成兩隊比分
-  function rating(t) { return t.gp * t.net / (t.gp + MODEL.shrinkK); }
+  // 預測總分 = 兩隊場均得失分直接平均（整季至今與近 10 場按同樣比例混合，不用 PACE）；
+  // 再用 主隊 = 總分/2 + 分差/2 拆成兩隊比分
+  function shrunk(n, net) { return n * net / (n + MODEL.shrinkK); }
+
+  function rating(t) {
+    var w = MODEL.recentWeight;
+    return (1 - w) * shrunk(t.gp, t.net) + w * shrunk(Math.min(10, t.gp), t.net10);
+  }
 
   function predictSeason(a, h) {
-    var total = (a.off + h.def) / 2 + (h.off + a.def) / 2;
+    var w = MODEL.recentWeight;
+    var totalSeason = (a.off + h.def) / 2 + (h.off + a.def) / 2;
+    var totalRecent = (a.l10off + h.l10def) / 2 + (h.l10off + a.l10def) / 2;
+    var total = (1 - w) * totalSeason + w * totalRecent;
     var margin = rating(h) - rating(a) + MODEL.homeAdv;
     return { away: total / 2 - margin / 2, home: total / 2 + margin / 2 };
   }

@@ -42,14 +42,18 @@ PREV_SEASON = {
     "end": datetime(2026, 4, 12),
     "excluded": {(datetime(2025, 12, 16), "San Antonio Spurs", "New York Knicks")},
 }
-# 球季進行中的預測模型（只用本季已打的比賽）：
-#   球隊評分 = 已打場數 x 本季淨勝分 / (已打場數 + shrinkK)    淨勝分 = 場均得分 - 場均失分
+# 球季進行中的預測模型 ①「實力評分法」（只用本季已打的比賽）：
+#   整季評分 = 已打場數 x 整季至今淨勝分 / (已打場數 + shrinkK)        淨勝分 = 場均得分 - 場均失分
+#   近況評分 = 近10場場數 x 近10場淨勝分 / (近10場場數 + shrinkK)       不滿10場就用已打場數
+#   球隊評分 = (1 - recentWeight) x 整季評分 + recentWeight x 近況評分
 #   預測分差 = 主隊評分 - 客隊評分 + homeAdv
-#   預測總分 = 兩隊本季場均得失分直接平均（不用 PACE）；主隊 = 總分/2 + 分差/2，客隊 = 總分/2 - 分差/2
+#   預測總分 = 整季場均得失分平均與近10場場均得失分平均，兩者按同樣比例混合（不用 PACE）
+#   主隊 = 總分/2 + 分差/2，客隊 = 總分/2 - 分差/2
 # shrinkK：打得少時把評分往「平均球隊」拉回，避免一兩場大比分把強弱放太大。用 2024-25、2025-26
-#   兩季逐場回測（見 Project_NBA_Preseason_review），K=5 時分差校正斜率最接近 1（0.96、1.02）。
+#   兩季逐場回測（見 Project_NBA_Preseason_review），K=5 時分差校正斜率最接近 1。
+# recentWeight：近況占多少。回測三季：純整季猜對 2408 / 3643，純近10場 2368，各占一半（0.5）2416。
 # homeAdv：主場優勢（分），三季實測主場平均多贏 +1.6 ~ +2.2。
-MODEL = {"shrinkK": 5, "homeAdv": 2}
+MODEL = {"shrinkK": 5, "homeAdv": 2, "recentWeight": 0.5}
 
 # 英文隊名 -> (縮寫, 中文名, 分區, 代表色)
 TEAMS = {
@@ -273,8 +277,9 @@ def main(raw_dir, target, complete):
             "l10def": round(sum(o for _, o, _ in last10) / n10, 1) if n10 else None,
             "l10rec": f"{sum(1 for p, o, _ in last10 if p > o)}-{sum(1 for p, o, _ in last10 if p < o)}",
         }
-        if not complete:  # 預測模型要用的本季場均淨勝分，多留一位小數（0 場的球隊是 null）
+        if not complete:  # 預測模型要用的淨勝分（整季至今、近10場），多留一位小數（0 場的球隊是 null）
             out[en]["net"] = round(sum(p - o for p, o, _ in g) / n, 2) if n else None
+            out[en]["net10"] = round(sum(p - o for p, o, _ in last10) / n10, 2) if n10 else None
 
     h2h = build_h2h(games)
     if complete:
