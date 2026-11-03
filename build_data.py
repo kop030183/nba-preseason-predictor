@@ -24,7 +24,8 @@ RAW = ROOT / "raw"
 SEASON_LABEL = "2026-27"
 SEASON_COMPLETE = False  # True = 整季已打完；False = 球季進行中
 GAME_FILES = ["games_2026-27.txt"]
-PACE_FILE = "pace_2025-26.txt"  # 賽季前模式才用到 PACE；球季進行中的預測不用 PACE（新球季也還沒有）
+PACE_FILE = "pace_2025-26.txt"  # 只有「整季完成」模式（賽季前預測）用這個檔
+BOX_FILE = "boxscores_2026-27.json"  # 球季進行中：由 fetch_espn_games.py 產生，用來算本季累積 PACE（不用上季的）
 REGULAR_SEASON_GAMES = 1230  # 30隊 x 82場 / 2
 REGULAR_SEASON_END = datetime(2027, 4, 11)  # 例行賽最後一天，之後是附加賽/季後賽
 # 原始資料混有一場「NBA盃決賽」(不計入例行賽戰績)，要排除：(日期, 客隊, 主隊)
@@ -139,6 +140,39 @@ def load_pace(raw_dir):
     return pace
 
 
+def season_pace(raw_dir, games):
+    """球季進行中：每隊的「本季累積 PACE」（每 48 分鐘的回合數），由 boxscore 算出。
+
+    回合數公式同 Basketball-Reference：
+      估算回合 = 出手 + 0.4 x 罰球出手 - 1.07 x 進攻籃板率 x 投失次數 + 失誤，雙方各估一次取平均；
+      PACE = 48 x 總回合 / 總出賽時間（以 5 人同時在場換算，延長賽每節多 5 分鐘）。
+    本季 0 場的球隊沒有 PACE，輸出 None。
+    """
+    path = raw_dir / BOX_FILE
+    assert path.exists(), f"找不到 {path}，請先執行 python fetch_espn_games.py"
+    cache = json.loads(path.read_text(encoding="utf-8"))
+    by_game = {(datetime.fromisoformat(v["date"]), v["away"], v["home"]): v for v in cache.values()}
+
+    def est(t, o):
+        return t["fga"] + 0.4 * t["fta"] - 1.07 * t["orb"] / (t["orb"] + o["drb"]) * (t["fga"] - t["fgm"]) + t["tov"]
+
+    poss, mins = defaultdict(float), defaultdict(float)
+    missing = []
+    for d, vis, _, home, _ in games:
+        box = by_game.get((d, vis, home))
+        if box is None:
+            missing.append(f"{d:%Y-%m-%d} {vis} @ {home}")
+            continue
+        a, h = box["stats"][vis], box["stats"][home]
+        game_poss = 0.5 * (est(a, h) + est(h, a))
+        minutes5 = 48 + 5 * (box["periods"] - 4)
+        for t in (vis, home):
+            poss[t] += game_poss
+            mins[t] += minutes5
+    assert not missing, f"有 {len(missing)} 場比賽沒有 boxscore，請先執行 python fetch_espn_games.py：{missing[:3]}..."
+    return {t: round(48 * poss[t] / mins[t], 1) if mins[t] else None for t in TEAMS}
+
+
 def check_no_duplicates_or_future(games, today):
     """兩種模式都檢查：沒有重複比賽、沒有未來日期。"""
     seen = set()
@@ -200,13 +234,14 @@ def load_prev_season(raw_dir):
 
 def main(raw_dir, target, complete):
     games, excluded = load_games(raw_dir, GAME_FILES, REGULAR_SEASON_END, EXCLUDED_GAMES)
-    pace = load_pace(raw_dir)
     assert games, "沒有任何比賽資料"
-    assert set(pace) == set(TEAMS), f"PACE隊名對不上：{set(pace) ^ set(TEAMS)}"
     check_no_duplicates_or_future(games, date.today())
     if complete:
+        pace = load_pace(raw_dir)
+        assert set(pace) == set(TEAMS), f"PACE隊名對不上：{set(pace) ^ set(TEAMS)}"
         assert len(games) == REGULAR_SEASON_GAMES, f"賽程筆數不對：{len(games)}"
     else:
+        pace = season_pace(raw_dir, games)
         check_in_progress_limits(games)
 
     log = build_log(games)
