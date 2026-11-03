@@ -251,7 +251,7 @@
     box.hidden = !g;
     if (!g) return;
     var homeWon = g.hs > g.as;
-    var mark = function (w) { return (w === "home") === homeWon ? '<span class="ok">猜對</span>' : '<span class="bad">猜錯</span>'; };
+    var mark = function (w) { return (w === "home") === homeWon ? '<span class="ok">預測正確</span>' : '<span class="bad">預測失敗</span>'; };
     box.innerHTML =
       "<p><strong>這場已經打完（" + fmtDate(g.d) + "）。</strong>下面是賽前預測，用的是這場開打前的數據（更新至 " +
       fmtDate(PRE.asOf) + "）。</p>" +
@@ -421,10 +421,28 @@
 
   function hasUpcoming() { return !!lastDate && lastDate >= todayTW(); }
 
+  // 最早能選的日期：今天之前「最近一個有比賽的日子」（看那天的賽前預測和結果），沒有就是今天。更早的過去日期不能選
+  function minDate() {
+    var t = todayTW();
+    var prev = null;
+    for (var i = 0; i < dates.length; i++) if (dates[i] < t) prev = dates[i];
+    return prev || t;
+  }
+
   function clampDate(d) {
-    var lo = todayTW();
-    if (!isDate(d)) d = lo;
+    var lo = minDate();
+    if (!isDate(d)) d = todayTW();
     return d < lo ? lo : (d > lastDate ? lastDate : d);
+  }
+
+  function prevMatchDay(d) {  // d 之前的一個比賽日（不能早於最早能選的日期）
+    for (var i = dates.length - 1; i >= 0; i--) if (dates[i] < d) return dates[i] >= minDate() ? dates[i] : null;
+    return null;
+  }
+
+  function nextMatchDay(d) {  // d 之後的一個比賽日
+    for (var i = 0; i < dates.length; i++) if (dates[i] > d) return dates[i];
+    return null;
   }
 
   function miniBadge(t) {
@@ -447,7 +465,8 @@
     var a = g.a ? T[ABBR[g.a]] : null;
     var h = g.h ? T[ABBR[g.h]] : null;
     var pi = MODEL ? preGameInfo(g) : null;
-    var clickable = !!(a && h) && (g.s === "S" || g.s === "L" || !!pi);
+    var past = date < todayTW();  // 已經過去的日子：資料沒更新時，狀態還是「尚未開打」，這種不能點（只有有賽前預測的已完賽比賽能點）
+    var clickable = !!(a && h) && (((g.s === "S" || g.s === "L") && !past) || !!pi);
     var el = document.createElement(clickable ? "a" : "div");
     el.className = "game" + (clickable ? "" : " is-static");
     if (clickable) {
@@ -464,14 +483,16 @@
     var line = "";
     if (g.s === "F") {
       line = "已完賽：" + (a ? a.zh : "") + " " + g.as + "、" + (h ? h.zh : "") + " " + g.hs;
-      if (pi) {  // 賽前預測 vs 實際結果
-        var win = pi.c.w1 === "home" ? pi.h : pi.a;
-        line += '<br>賽前預測 ' + win.zh + " 勝 " + f1(Math.abs(pi.c.p1.home - pi.c.p1.away)) + " 分：實力評分法 " +
-          (pi.ok1 ? '<span class="ok">猜對</span>' : '<span class="bad">猜錯</span>') + " · 近 10 場 PACE 法 " +
-          (pi.ok2 ? '<span class="ok">猜對</span>' : '<span class="bad">猜錯</span>');
+      if (pi) {  // 賽前預測（大比分那個算法）vs 實際結果
+        var predWin = pi.c.w1 === "home" ? pi.h : pi.a;
+        line += "<br>賽前預測：" + pi.a.zh + " " + f1(pi.c.p1.away) + " 比 " + pi.h.zh + " " + f1(pi.c.p1.home) +
+          "<br>賽前預測勝利：" + predWin.zh + "　" +
+          (pi.ok1 ? '<span class="ok">預測正確</span>' : '<span class="bad">預測失敗</span>');
       }
     } else if (g.s === "X") {
       line = "延期或取消";
+    } else if (past) {
+      line = "這天已經過去，更新資料後會顯示結果";
     } else if (!(a && h)) {
       line = "兩隊要等前一輪打完才決定";
     } else if (MODEL) {
@@ -490,10 +511,9 @@
 
   function renderSchedule(date) {
     curDate = date;
-    var today = todayTW();
     $("date-input").value = date;
-    $("date-prev").disabled = date <= today;
-    $("date-next").disabled = date >= lastDate;
+    $("date-prev").disabled = !prevMatchDay(date);
+    $("date-next").disabled = !nextMatchDay(date);
     var games = gamesByDate[date] || [];
     var list = $("game-list");
     list.innerHTML = "";
@@ -584,7 +604,7 @@
   // 分頁與賽程控制（沒有賽程、或賽程都已過去就不顯示分頁）
   if (hasUpcoming()) {
     $("tabs").hidden = false;
-    $("date-input").min = todayTW();
+    $("date-input").min = minDate();
     $("date-input").max = lastDate;
     $("tab-matchup").addEventListener("click", function () {
       location.hash = hashOf({ tab: "matchup", away: T[awaySel.value].abbr, home: T[homeSel.value].abbr });
@@ -593,8 +613,8 @@
       location.hash = hashOf({ tab: "schedule", date: curDate || nextGameDate(todayTW()) || lastDate });
     });
     $("date-input").addEventListener("change", function () { goDate($("date-input").value); });
-    $("date-prev").addEventListener("click", function () { goDate(addDays(curDate, -1)); });
-    $("date-next").addEventListener("click", function () { goDate(addDays(curDate, 1)); });
+    $("date-prev").addEventListener("click", function () { var d = prevMatchDay(curDate); if (d) goDate(d); });
+    $("date-next").addEventListener("click", function () { var d = nextMatchDay(curDate); if (d) goDate(d); });
     $("date-today").addEventListener("click", function () { goDate(todayTW()); });
   }
   window.addEventListener("hashchange", applyHash);

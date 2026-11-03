@@ -24,12 +24,12 @@
     <!-- 第二層：選日期，列出那天的賽程，點一場進到那場的預測 -->
     <section id="view-schedule" class="schedule" aria-label="賽程" hidden>
       <div class="datebar">
-        <button type="button" id="date-prev" class="icon-btn" aria-label="前一天" title="前一天">◀</button>
+        <button type="button" id="date-prev" class="icon-btn" aria-label="前一個比賽日" title="前一個比賽日">◀</button>
         <input type="date" id="date-input" aria-label="選擇日期（台灣日期）">
-        <button type="button" id="date-next" class="icon-btn" aria-label="後一天" title="後一天">▶</button>
+        <button type="button" id="date-next" class="icon-btn" aria-label="後一個比賽日" title="後一個比賽日">▶</button>
         <button type="button" id="date-today" class="chip">今天</button>
       </div>
-      <p class="date-note">日期和開賽時間都是台灣時間，過去的日期不能選。點一場比賽，看那場的預測。</p>
+      <p class="date-note">日期和開賽時間都是台灣時間。可以看「前一個比賽日」（賽前預測與結果）和之後的日期，更早的不能選；◀ ▶ 是跳到前／後一個比賽日。點一場比賽，看那場的預測。</p>
       <ul class="game-list" id="game-list"></ul>
       <div class="game-empty" id="game-empty" hidden>
         <p id="game-empty-text"></p>
