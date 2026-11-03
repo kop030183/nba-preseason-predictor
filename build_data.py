@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 """
-把 raw/ 裡的 2025-26 例行賽原始資料，整理成網頁用的 data/teams.js。
+把 raw/ 裡的例行賽原始資料，整理成網頁用的 data/teams.js。
 
-資料是「凍結快照」：只含 2025-26 例行賽(前1230場，不含季後賽)，不會即時更新。
-2026-27 開打後，把 raw/ 換成新球季的檔案、改下面 SEASON_LABEL，重跑一次即可。
+只收例行賽（日期 <= REGULAR_SEASON_END，再排除 EXCLUDED_GAMES 的盃賽決賽），不含附加賽/季後賽。
+注意不能用「前 1230 場」切例行賽：盃賽決賽會被算進去。
+新球季的比分由 fetch_espn_games.py 寫進 raw/，每次更新：先跑它，再跑這支。
 
 兩種模式（改下面的 SEASON_COMPLETE，或執行時加 --complete / --in-progress 臨時覆蓋）：
 - 整季完成：嚴格檢查 1230 場、每隊 82 場、435 組對戰，網頁 mode = "preseason"（拿整季數據當下一季的賽季前預測）
@@ -20,16 +21,17 @@ from collections import defaultdict
 
 ROOT = Path(__file__).parent
 RAW = ROOT / "raw"
-SEASON_LABEL = "2025-26"
-SEASON_COMPLETE = True  # True = 整季已打完；False = 球季進行中
-GAME_FILES = ["games_2025-26_oct.txt", "games_2025-26_nov_to_june.txt"]
-PACE_FILE = "pace_2025-26.txt"
+SEASON_LABEL = "2026-27"
+SEASON_COMPLETE = False  # True = 整季已打完；False = 球季進行中
+GAME_FILES = ["games_2026-27.txt"]
+PACE_FILE = "pace_2025-26.txt"  # 新球季的 PACE 還沒有，先沿用上季（PACE 對勝負判定影響很小）
 REGULAR_SEASON_GAMES = 1230  # 30隊 x 82場 / 2
-REGULAR_SEASON_END = datetime(2026, 4, 12)  # 例行賽最後一天，之後是附加賽/季後賽
+REGULAR_SEASON_END = datetime(2027, 4, 11)  # 例行賽最後一天，之後是附加賽/季後賽
 # 原始資料混有一場「NBA盃決賽」(不計入例行賽戰績)，要排除：(日期, 客隊, 主隊)
 # 只比對日期和隊伍，不比對比分（決賽打完前不知道比分，資料有一分誤差也不會漏排）。
 # 2026-27 的盃賽決賽在 2026-12-11，兩隊 12/9 準決賽後才知道，到時再加進來。
-EXCLUDED_GAMES = {(datetime(2025, 12, 16), "San Antonio Spurs", "New York Knicks")}
+# 盃賽小組賽、八強、四強都算例行賽，不用排除。
+EXCLUDED_GAMES = set()
 
 # 英文隊名 -> (縮寫, 中文名, 分區, 代表色)
 TEAMS = {

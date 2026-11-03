@@ -22,6 +22,7 @@
       statsTitle: "上季數據對照",
       l10note: "上季季末",
       h2hTitle: "上季兩隊對戰 ",
+      source: "Basketball-Reference.com",
       foot: "整理自 " + D.season + " 例行賽 " + N_GAMES + " 場"
     },
     in_season: {
@@ -31,6 +32,7 @@
       statsTitle: D.season + " 本季數據對照",
       l10note: "",
       h2hTitle: D.season + " 例行賽兩隊對戰 ",
+      source: "ESPN（" + D.season + " 比分）、Basketball-Reference.com（PACE）",
       foot: "整理自 " + D.season + " 例行賽已完成的 " + N_GAMES + " 場（更新至 " + D.asOf + "）"
     }
   }[MODE];
@@ -185,7 +187,7 @@
   $("notice").appendChild(noticeStrong);
   $("notice").appendChild(document.createTextNode(COPY.notice));
   $("stats-title").textContent = COPY.statsTitle;
-  $("foot-text").textContent = "數據來源：Basketball-Reference.com，" + COPY.foot + "。僅供興趣參考。";
+  $("foot-text").textContent = "數據來源：" + COPY.source + "，" + COPY.foot + "。僅供興趣參考。";
 
   fillSelect(awaySel);
   fillSelect(homeSel);
