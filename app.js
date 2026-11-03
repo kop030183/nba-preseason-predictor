@@ -297,10 +297,11 @@
     var winTeam = wPace === "home" ? h : a;
     var diff = Math.abs(pace.home - pace.away);
     $("verdict-tag").textContent = winTeam.zh + " 勝";
-    $("board-margin").textContent = (MODEL ? "實力評分法：" : "") +
-      "預測分差 " + f1(diff) + " 分，總分 " + f1(pace.home + pace.away) + " 分";
+    // 球季進行中不顯示「預測分差、總分」那一行（賽季前模式照舊）
+    $("board-margin").hidden = !!MODEL;
+    $("board-margin").textContent = "預測分差 " + f1(diff) + " 分，總分 " + f1(pace.home + pace.away) + " 分";
 
-    // 第二個分數（只有球季進行中才有）；兩個算法預測的勝方相同或不同，在比分上方給一句總結
+    // 近 10 場 PACE 法（只有球季進行中才有）；兩個算法預測的勝方相同或不同，在比分上方給一句總結
     var alt = $("alt");
     var summary = $("summary");
     alt.hidden = !MODEL;
@@ -310,7 +311,7 @@
       var same = cmp.same;
       var win2 = cmp.w2 === "home" ? h : a;
       alt.innerHTML =
-        '<div class="alt-title">第二個分數：近 10 場 PACE 法</div>' +
+        '<div class="alt-title">近 10 場 PACE 法</div>' +
         '<div class="alt-line">' + a.zh + " " + f1(p2.away) + "、" + h.zh + " " + f1(p2.home) +
         "（" + win2.zh + " 勝 " + f1(Math.abs(p2.home - p2.away)) + " 分）</div>";
       summary.className = "summary " + (same ? "agree" : "differ");
