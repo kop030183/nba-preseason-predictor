@@ -24,7 +24,7 @@ RAW = ROOT / "raw"
 SEASON_LABEL = "2026-27"
 SEASON_COMPLETE = False  # True = 整季已打完；False = 球季進行中
 GAME_FILES = ["games_2026-27.txt"]
-PACE_FILE = "pace_2025-26.txt"  # 新球季的 PACE 還沒有，先沿用上季（PACE 對勝負判定影響很小）
+PACE_FILE = "pace_2025-26.txt"  # 賽季前模式才用到 PACE；球季進行中的預測不用 PACE（新球季也還沒有）
 REGULAR_SEASON_GAMES = 1230  # 30隊 x 82場 / 2
 REGULAR_SEASON_END = datetime(2027, 4, 11)  # 例行賽最後一天，之後是附加賽/季後賽
 # 原始資料混有一場「NBA盃決賽」(不計入例行賽戰績)，要排除：(日期, 客隊, 主隊)
@@ -33,18 +33,22 @@ REGULAR_SEASON_END = datetime(2027, 4, 11)  # 例行賽最後一天，之後是�
 # 盃賽小組賽、八強、四強都算例行賽，不用排除。
 EXCLUDED_GAMES = set()
 
-# 上一季整季資料：球季進行中時，預測要把「上季」和「本季」混合（整季完成模式用不到）。不需要混合就設成 None。
+# 上一季整季資料：球季進行中時，只用來在網頁顯示「上季兩隊交手紀錄」，不進預測公式
+# （休賽季球員異動大，上季表現不拿來預測本季）。不想顯示就設成 None。
 PREV_SEASON = {
     "label": "2025-26",
     "game_files": ["games_2025-26_oct.txt", "games_2025-26_nov_to_june.txt"],
     "end": datetime(2026, 4, 12),
     "excluded": {(datetime(2025, 12, 16), "San Antonio Spurs", "New York Knicks")},
 }
-# 混合法參數（依據：Project_NBA_Preseason_review/02 第 7 節的實測，K=10、R=0.6）：
-#   球隊評分 = (本季場數 x 本季淨勝分 + k x r x 上季淨勝分) / (本季場數 + k)
+# 球季進行中的預測模型（只用本季已打的比賽）：
+#   球隊評分 = 已打場數 x 本季淨勝分 / (已打場數 + shrinkK)    淨勝分 = 場均得分 - 場均失分
 #   預測分差 = 主隊評分 - 客隊評分 + homeAdv
-# k = 上季數據等於幾場本季比賽的份量；r = 上季強弱往平均拉回後保留的比例；homeAdv = 主場優勢（分）
-BLEND = {"k": 10, "r": 0.6, "homeAdv": 2}
+#   預測總分 = 兩隊本季場均得失分直接平均（不用 PACE）；主隊 = 總分/2 + 分差/2，客隊 = 總分/2 - 分差/2
+# shrinkK：打得少時把評分往「平均球隊」拉回，避免一兩場大比分把強弱放太大。用 2024-25、2025-26
+#   兩季逐場回測（見 Project_NBA_Preseason_review），K=5 時分差校正斜率最接近 1（0.96、1.02）。
+# homeAdv：主場優勢（分），三季實測主場平均多贏 +1.6 ~ +2.2。
+MODEL = {"shrinkK": 5, "homeAdv": 2}
 
 # 英文隊名 -> (縮寫, 中文名, 分區, 代表色)
 TEAMS = {
@@ -234,6 +238,8 @@ def main(raw_dir, target, complete):
             "l10def": round(sum(o for _, o, _ in last10) / n10, 1) if n10 else None,
             "l10rec": f"{sum(1 for p, o, _ in last10 if p > o)}-{sum(1 for p, o, _ in last10 if p < o)}",
         }
+        if not complete:  # 預測模型要用的本季場均淨勝分，多留一位小數（0 場的球隊是 null）
+            out[en]["net"] = round(sum(p - o for p, o, _ in g) / n, 2) if n else None
 
     h2h = build_h2h(games)
     if complete:
@@ -249,22 +255,13 @@ def main(raw_dir, target, complete):
         "homeAdvantage": 1,
     }
 
-    # 球季進行中：附上上一季的整季數據，網頁用混合法預測（整季完成模式不需要）
-    if not complete and PREV_SEASON:
-        _, prev_log, prev_h2h = load_prev_season(raw_dir)
-        for en in TEAMS:
-            g = prev_log[en]
-            n = len(g)
-            out[en]["prev"] = {
-                "gp": n,
-                "w": sum(1 for p, o, _ in g if p > o),
-                "l": sum(1 for p, o, _ in g if p < o),
-                "off": round(sum(p for p, _, _ in g) / n, 2),  # 混合法要用，多留一位小數
-                "def": round(sum(o for _, o, _ in g) / n, 2),
-            }
-        payload["prevSeason"] = PREV_SEASON["label"]
-        payload["blend"] = BLEND
-        payload["h2hPrev"] = prev_h2h
+    # 球季進行中：附上預測模型參數，以及上季交手紀錄（只供顯示，不進預測）
+    if not complete:
+        payload["model"] = MODEL
+        if PREV_SEASON:
+            _, _, prev_h2h = load_prev_season(raw_dir)
+            payload["prevSeason"] = PREV_SEASON["label"]
+            payload["h2hPrev"] = prev_h2h
 
     payload["teams"] = out
     target.parent.mkdir(parents=True, exist_ok=True)

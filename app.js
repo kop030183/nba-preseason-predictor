@@ -9,9 +9,8 @@
   var awaySel = $("away");
   var homeSel = $("home");
 
-  // 混合法：球季進行中，且資料帶有每隊的上季數據與參數時，預測改用「上季＋本季」混合（參數見 build_data.py 的 BLEND）
-  var BLEND = D.mode === "in_season" && D.blend &&
-    Object.keys(T).every(function (k) { return T[k].prev; }) ? D.blend : null;
+  // 球季進行中：資料帶有模型參數時，預測只用本季已打的比賽（不用上季表現；參數見 build_data.py 的 MODEL）
+  var MODEL = D.mode === "in_season" && D.model ? D.model : null;
 
   // ---------- 依資料模式切換的文字 ----------
   // D.mode："preseason" = 拿上一季整季數據當賽季前預測；"in_season" = 球季進行中，用本季已打的比賽
@@ -31,19 +30,19 @@
     },
     in_season: {
       title: "NBA 對戰預測",
-      notice: BLEND
-        ? "已完成 " + N_GAMES + " 場 " + D.season + " 例行賽（更新至 " + D.asOf + "）。預測把 " + D.prevSeason +
-          " 整季數據和本季數據混合：本季比重 = 該隊已打場數 ÷（已打場數 + " + BLEND.k +
-          "），打得越多越以本季為主。賽季初期樣本少，預測波動較大。"
+      notice: MODEL
+        ? "已完成 " + N_GAMES + " 場 " + D.season + " 例行賽（更新至 " + D.asOf + "）。預測只用本季已打的比賽，" +
+          "不使用上季表現（休賽季球員異動大）：實力評分 = 淨勝分 × 已打場數 ÷（已打場數 + " + MODEL.shrinkK +
+          "），打得少時往平均拉回。賽季初期樣本少，預測波動較大。"
         : "目前使用 " + D.season + " 例行賽已完成的 " + N_GAMES + " 場比賽數據（更新至 " + D.asOf +
           "）。賽季初期樣本少，預測波動較大。",
-      statsTitle: D.season + (BLEND ? " 數據對照" : " 本季數據對照"),
+      statsTitle: D.season + " 本季數據對照",
       recLabel: "本季戰績",
       l10note: "",
       h2hTitle: D.season + " 例行賽兩隊對戰 ",
-      source: BLEND
-        ? "ESPN（" + D.season + " 比分）、Basketball-Reference.com（" + D.prevSeason + " 比分與 PACE）"
-        : "ESPN（" + D.season + " 比分）、Basketball-Reference.com（PACE）",
+      source: D.h2hPrev
+        ? "ESPN（" + D.season + " 比分）、Basketball-Reference.com（" + D.prevSeason + " 交手紀錄）"
+        : "ESPN（" + D.season + " 比分）",
       foot: "整理自 " + D.season + " 例行賽已完成的 " + N_GAMES + " 場（更新至 " + D.asOf + "）"
     }
   }[MODE];
@@ -58,28 +57,15 @@
     };
   }
 
-  // ---------- 混合法（球季進行中） ----------
-  // 球隊評分 = (本季場數 x 本季淨勝分 + K x R x 上季淨勝分) / (本季場數 + K)，淨勝分 = 場均得分 - 場均失分
+  // ---------- 球季進行中的預測（只用本季已打的比賽） ----------
+  // 實力評分 = 已打場數 x 本季淨勝分 / (已打場數 + K)，淨勝分 = 場均得分 - 場均失分（打得少時往平均拉回）
   // 預測分差 = 主隊評分 - 客隊評分 + 主場優勢（完整分差，不像 PACE 法把分差砍半，所以主場是 2 分不是 1 分）
-  // 預測總分沿用 PACE 法（得失分水準也用同樣的場數比重混合，但不打折）；再用 主隊 = 總分/2 + 分差/2 拆成兩隊比分
-  function curWeight(t) { return t.gp / (t.gp + BLEND.k); }
+  // 預測總分 = 兩隊本季場均得失分直接平均（不用 PACE）；再用 主隊 = 總分/2 + 分差/2 拆成兩隊比分
+  function rating(t) { return t.gp * t.net / (t.gp + MODEL.shrinkK); }
 
-  function rating(t) {
-    var cur = t.gp ? t.off - t.def : 0;
-    var prev = t.prev.off - t.prev.def;
-    return (t.gp * cur + BLEND.k * BLEND.r * prev) / (t.gp + BLEND.k);
-  }
-
-  function level(t, key) {
-    return ((t.gp ? t.gp * t[key] : 0) + BLEND.k * t.prev[key]) / (t.gp + BLEND.k);
-  }
-
-  function predictBlend(a, h) {
-    var avg = (a.pace + h.pace) / 2;
-    var awayPts = (level(a, "off") / a.pace * avg + level(h, "def") / h.pace * avg) / 2;
-    var homePts = (level(h, "off") / h.pace * avg + level(a, "def") / a.pace * avg) / 2;
-    var total = awayPts + homePts;
-    var margin = rating(h) - rating(a) + BLEND.homeAdv;
+  function predictSeason(a, h) {
+    var total = (a.off + h.def) / 2 + (h.off + a.def) / 2;
+    var margin = rating(h) - rating(a) + MODEL.homeAdv;
     return { away: total / 2 - margin / 2, home: total / 2 + margin / 2 };
   }
 
@@ -141,11 +127,10 @@
     return rec + '<span class="rate">' + (total ? (w / total * 100).toFixed(1) + "%" : "—") + "</span>";
   }
 
-  // 綜合評分格："+8.4" 加一行小字「本季 41%」（本季數據在評分裡的比重）
+  // 實力評分格："+8.4" 加一行小字「已打 8 場」
   function ratingCell(t) {
     var r = rating(t);
-    return (r >= 0 ? "+" : "") + f1(r) +
-      '<span class="rate">本季 ' + Math.round(curWeight(t) * 100) + "%</span>";
+    return (r >= 0 ? "+" : "") + f1(r) + '<span class="rate">已打 ' + t.gp + " 場</span>";
   }
 
   // 某一份交手資料（本季或上季）裡，客隊 a 和主隊 h 的對戰；沒有交手就回傳空字串
@@ -181,8 +166,8 @@
     }
     var a = T[aKey];
     var h = T[hKey];
-    // 混合法有上季數據可用，本季 0 場也能預測；沒有混合法時，0 場的球隊沒有任何數據可算
-    var noGames = BLEND ? [] : [a, h].filter(function (t) { return !t.gp; }).map(function (t) { return t.zh; });
+    // 本季 0 場的球隊沒有任何數據可算（球季進行中才會發生）
+    var noGames = [a, h].filter(function (t) { return !t.gp; }).map(function (t) { return t.zh; });
     if (noGames.length) {
       hint.textContent = noGames.join("、") + " 本季尚未出賽，暫時無法預測。";
       hint.hidden = false;
@@ -191,7 +176,7 @@
     }
     hint.hidden = true;
 
-    var pace = BLEND ? predictBlend(a, h) : predictPace(a, h);
+    var pace = MODEL ? predictSeason(a, h) : predictPace(a, h);
     var wPace = winnerOf(pace);
 
     // 主記分板
@@ -203,9 +188,9 @@
     $("board-margin").textContent =
       "預測分差 " + f1(diff) + " 分，總分 " + f1(pace.home + pace.away) + " 分";
 
-    // 交手紀錄（以客隊為主視角）；混合法時除了本季，還附上上季的交手
+    // 交手紀錄（以客隊為主視角）；球季進行中除了本季，還附上上季的交手（只供參考，不進預測）
     var blocks = [h2hBlock(D.h2h, COPY.h2hTitle, a, h)];
-    if (BLEND && D.h2hPrev) blocks.push(h2hBlock(D.h2hPrev, "上季（" + D.prevSeason + "）兩隊對戰 ", a, h));
+    if (MODEL && D.h2hPrev) blocks.push(h2hBlock(D.h2hPrev, "上季（" + D.prevSeason + "）兩隊對戰 ", a, h));
     blocks = blocks.filter(Boolean);
     $("h2h").innerHTML = blocks.join("");
     $("h2h").hidden = !blocks.length;
@@ -215,25 +200,16 @@
     $("s-home").textContent = h.zh;
     var l10note = COPY.l10note ? '<span class="row-note">' + COPY.l10note + "</span>" : "";
     var rows = [];
-    if (BLEND) {
-      rows.push(["綜合評分", ratingCell(a), ratingCell(h)]);
-    }
-    rows = rows.concat([
-      [COPY.recLabel, withRate(a.w + "-" + a.l), withRate(h.w + "-" + h.l)]
-    ]);
-    if (BLEND) {
-      rows.push(["上季戰績", withRate(a.prev.w + "-" + a.prev.l), withRate(h.prev.w + "-" + h.prev.l)]);
-    }
-    rows = rows.concat([
-      ["主場戰績", withRate(a.home), withRate(h.home)],
-      ["客場戰績", withRate(a.road), withRate(h.road)],
-      ["場均得分", f1(a.off), f1(h.off)],
-      ["場均失分", f1(a.def), f1(h.def)],
-      ["PACE", f1(a.pace), f1(h.pace)],
-      ["近 10 場戰績" + l10note, a.l10rec, h.l10rec],
-      ["近 10 場得分" + l10note, f1(a.l10off), f1(h.l10off)],
-      ["近 10 場失分" + l10note, f1(a.l10def), f1(h.l10def)]
-    ]);
+    if (MODEL) rows.push(["實力評分", ratingCell(a), ratingCell(h)]);
+    rows.push([COPY.recLabel, withRate(a.w + "-" + a.l), withRate(h.w + "-" + h.l)]);
+    rows.push(["主場戰績", withRate(a.home), withRate(h.home)]);
+    rows.push(["客場戰績", withRate(a.road), withRate(h.road)]);
+    rows.push(["場均得分", f1(a.off), f1(h.off)]);
+    rows.push(["場均失分", f1(a.def), f1(h.def)]);
+    if (!MODEL) rows.push(["PACE", f1(a.pace), f1(h.pace)]);  // 球季進行中的預測不用 PACE，不顯示
+    rows.push(["近 10 場戰績" + l10note, a.l10rec, h.l10rec]);
+    rows.push(["近 10 場得分" + l10note, f1(a.l10off), f1(h.l10off)]);
+    rows.push(["近 10 場失分" + l10note, f1(a.l10def), f1(h.l10def)]);
     $("stats-body").innerHTML = rows.map(function (r) {
       return "<tr><td>" + r[1] + "</td><td>" + r[0] + "</td><td>" + r[2] + "</td></tr>";
     }).join("");
