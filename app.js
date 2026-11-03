@@ -485,7 +485,7 @@
       line = "已完賽：" + (a ? a.zh : "") + " " + g.as + "、" + (h ? h.zh : "") + " " + g.hs;
       if (pi) {  // 賽前預測（大比分那個算法）vs 實際結果
         var predWin = pi.c.w1 === "home" ? pi.h : pi.a;
-        line += "<br>賽前預測比分：" + pi.a.zh + " " + f1(pi.c.p1.away) + " 比 " + pi.h.zh + " " + f1(pi.c.p1.home) +
+        line += "<br>賽前預測比分：" + pi.a.zh + " " + f1(pi.c.p1.away) + " : " + f1(pi.c.p1.home) + " " + pi.h.zh +
           "<br>賽前預測：" + predWin.zh + " 勝　" +
           (pi.ok1 ? '<span class="ok">預測正確</span>' : '<span class="bad">預測失敗</span>');
       }
