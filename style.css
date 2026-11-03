@@ -134,6 +134,7 @@ select:focus-visible, .swap:focus-visible {
   border-top: 1px solid var(--line);
   text-align: center; font-size: .9rem;
 }
+.h2h-block + .h2h-block { margin-top: 10px; }
 .h2h-title { font-weight: 600; margin-bottom: 4px; }
 .h2h-game { color: var(--muted); font-variant-numeric: tabular-nums; }
 
