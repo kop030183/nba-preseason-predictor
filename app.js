@@ -30,13 +30,7 @@
     },
     in_season: {
       title: "NBA 對戰預測",
-      notice: MODEL
-        ? "已完成 " + N_GAMES + " 場 " + D.season + " 例行賽（更新至 " + D.asOf + "）。預測只用本季已打的比賽，" +
-          "不使用上季表現（休賽季球員異動大）。兩個分數：① 實力評分法：整季至今與近 10 場的淨勝分各占一半，" +
-          "各自再依場數往平均拉回（× 場數 ÷（場數 + " + MODEL.shrinkK + "））；② 近 10 場 PACE 法。不滿 10 場都用已打場數。" +
-          "賽季初期樣本少，預測波動較大。"
-        : "目前使用 " + D.season + " 例行賽已完成的 " + N_GAMES + " 場比賽數據（更新至 " + D.asOf +
-          "）。賽季初期樣本少，預測波動較大。",
+      notice: "",  // 球季進行中不顯示說明框（資料更新到哪天，頁尾會寫）
       statsTitle: D.season + " 本季數據對照",
       recLabel: "本季戰績",
       l10note: "",
@@ -142,18 +136,66 @@
     node.id = id;
   }
 
-  // "53-29" -> 戰績 + 換行顯示勝率 "64.6%"
-  function withRate(rec) {
+  // ---------- 數據對照：球隊名稱與數字用隊色，較優的一方加皇冠 ----------
+  function hexToRgb(hex) {
+    return [1, 3, 5].map(function (i) { return parseInt(hex.substr(i, 2), 16); });
+  }
+
+  function luminance(rgb) {  // WCAG 相對亮度
+    var c = rgb.map(function (v) {
+      v = v / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    });
+    return 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+  }
+
+  // 隊色直接當文字色，有些顏色在卡片底色上會看不清楚（深色底上的深藍、淺色底上的亮黃）：
+  // 對比不到 4.5 就往白色（深色底）或黑色（淺色底）一步步調整，直到看得清楚，色相不變
+  function readableOn(hex, bg) {
+    var c = hexToRgb(hex);
+    var bgL = luminance(bg);
+    var target = bgL < 0.5 ? [255, 255, 255] : [0, 0, 0];
+    for (var p = 0; p <= 1.0001; p += 0.05) {
+      var m = c.map(function (v, i) { return Math.round(v + (target[i] - v) * p); });
+      var l = luminance(m);
+      if ((Math.max(l, bgL) + 0.05) / (Math.min(l, bgL) + 0.05) >= 4.5) return "rgb(" + m.join(",") + ")";
+    }
+    return "rgb(" + target.join(",") + ")";
+  }
+
+  function cardBackground() {
+    var m = getComputedStyle($("stats-title").parentNode).backgroundColor.match(/\d+/g);
+    return [Number(m[0]), Number(m[1]), Number(m[2])];
+  }
+
+  // 比較兩邊的數字，回傳較優的一方："a"（客隊）、"h"（主隊），一樣或無法比較回傳 null
+  function betterHigh(x, y) { return x > y ? "a" : (y > x ? "h" : null); }
+  function betterLow(x, y) { return x < y ? "a" : (y < x ? "h" : null); }
+  function betterRecord(ra, rh) {  // "7-1" 對 "3-4"：比勝率；其中一隊 0 場、或勝率一樣都不給皇冠
+    var pa = ra.split("-").map(Number), ph = rh.split("-").map(Number);
+    var ta = pa[0] + pa[1], th = ph[0] + ph[1];
+    if (!ta || !th) return null;
+    return betterHigh(pa[0] * th, ph[0] * ta);
+  }
+
+  // "53-29" 的小字：勝率 "64.6%"
+  function rateSub(rec) {
     var p = rec.split("-");
     var w = Number(p[0]);
     var total = w + Number(p[1]);
-    return rec + '<span class="rate">' + (total ? (w / total * 100).toFixed(1) + "%" : "—") + "</span>";
+    return '<span class="rate">' + (total ? (w / total * 100).toFixed(1) + "%" : "—") + "</span>";
+  }
+
+  // 一格數據：數字（隊色）+ 較優的加皇冠 + 小字
+  function statCell(main, sub, crown, color) {
+    return '<td style="color:' + color + '">' + main +
+      (crown ? ' <span class="crown" role="img" aria-label="較優" title="較優">👑</span>' : "") + (sub || "") + "</td>";
   }
 
   // 實力評分格："+8.4" 加一行小字「已打 8 場」
-  function ratingCell(t) {
+  function ratingText(t) {
     var r = rating(t);
-    return (r >= 0 ? "+" : "") + f1(r) + '<span class="rate">已打 ' + t.gp + " 場</span>";
+    return (r >= 0 ? "+" : "") + f1(r);
   }
 
   // 某一份交手資料（本季或上季）裡，客隊 a 和主隊 h 的對戰；沒有交手就回傳空字串
@@ -236,22 +278,33 @@
     $("h2h").hidden = !blocks.length;
 
     // 數據對照
+    var bg = cardBackground();
+    var aColor = readableOn(a.color, bg);
+    var hColor = readableOn(h.color, bg);
     $("s-away").textContent = a.zh;
     $("s-home").textContent = h.zh;
+    $("s-away").style.color = aColor;
+    $("s-home").style.color = hColor;
     var l10note = COPY.l10note ? '<span class="row-note">' + COPY.l10note + "</span>" : "";
+    // 每列：[列名, 客隊數字, 客隊小字, 主隊數字, 主隊小字, 較優的一方（null = 不放皇冠）]
     var rows = [];
-    if (MODEL) rows.push(["實力評分", ratingCell(a), ratingCell(h)]);
-    rows.push([COPY.recLabel, withRate(a.w + "-" + a.l), withRate(h.w + "-" + h.l)]);
-    rows.push(["主場戰績", withRate(a.home), withRate(h.home)]);
-    rows.push(["客場戰績", withRate(a.road), withRate(h.road)]);
-    rows.push(["場均得分", f1(a.off), f1(h.off)]);
-    rows.push(["場均失分", f1(a.def), f1(h.def)]);
-    rows.push([MODEL ? "PACE（本季）" : "PACE", f1(a.pace), f1(h.pace)]);
-    rows.push(["近 10 場戰績" + l10note, a.l10rec, h.l10rec]);
-    rows.push(["近 10 場得分" + l10note, f1(a.l10off), f1(h.l10off)]);
-    rows.push(["近 10 場失分" + l10note, f1(a.l10def), f1(h.l10def)]);
+    if (MODEL) {
+      rows.push(["實力評分", ratingText(a), '<span class="rate">已打 ' + a.gp + " 場</span>",
+        ratingText(h), '<span class="rate">已打 ' + h.gp + " 場</span>", betterHigh(Number(f1(rating(a))), Number(f1(rating(h))))]);
+    }
+    var rec = function (label, ra, rh) { return [label, ra, rateSub(ra), rh, rateSub(rh), betterRecord(ra, rh)]; };
+    rows.push(rec(COPY.recLabel, a.w + "-" + a.l, h.w + "-" + h.l));
+    rows.push(rec("主場戰績", a.home, h.home));
+    rows.push(rec("客場戰績", a.road, h.road));
+    rows.push(["場均得分", f1(a.off), "", f1(h.off), "", betterHigh(a.off, h.off)]);
+    rows.push(["場均失分", f1(a.def), "", f1(h.def), "", betterLow(a.def, h.def)]);  // 失分越少越好
+    rows.push([MODEL ? "PACE（本季）" : "PACE", f1(a.pace), "", f1(h.pace), "", null]);  // 節奏快慢沒有好壞
+    rows.push(rec("近 10 場戰績" + l10note, a.l10rec, h.l10rec));
+    rows.push(["近 10 場得分" + l10note, f1(a.l10off), "", f1(h.l10off), "", betterHigh(a.l10off, h.l10off)]);
+    rows.push(["近 10 場失分" + l10note, f1(a.l10def), "", f1(h.l10def), "", betterLow(a.l10def, h.l10def)]);
     $("stats-body").innerHTML = rows.map(function (r) {
-      return "<tr><td>" + r[1] + "</td><td>" + r[0] + "</td><td>" + r[2] + "</td></tr>";
+      return "<tr>" + statCell(r[1], r[2], r[5] === "a", aColor) + "<td>" + r[0] + "</td>" +
+        statCell(r[3], r[4], r[5] === "h", hColor) + "</tr>";
     }).join("");
 
     result.hidden = false;
@@ -260,10 +313,14 @@
   // ---------- 初始化 ----------
   document.title = COPY.title;
   $("page-title").textContent = COPY.title;
-  var noticeStrong = document.createElement("strong");
-  noticeStrong.textContent = "資料說明：";
-  $("notice").appendChild(noticeStrong);
-  $("notice").appendChild(document.createTextNode(COPY.notice));
+  if (COPY.notice) {
+    var noticeStrong = document.createElement("strong");
+    noticeStrong.textContent = "資料說明：";
+    $("notice").appendChild(noticeStrong);
+    $("notice").appendChild(document.createTextNode(COPY.notice));
+  } else {
+    $("notice").hidden = true;
+  }
   $("stats-title").textContent = COPY.statsTitle;
   $("foot-text").textContent = "數據來源：" + COPY.source + "，" + COPY.foot + "。僅供興趣參考。";
 
@@ -274,6 +331,12 @@
 
   awaySel.addEventListener("change", render);
   homeSel.addEventListener("change", render);
+  // 使用者切換淺色/深色模式時，隊色要跟著重新調整
+  if (window.matchMedia) {
+    var darkMq = window.matchMedia("(prefers-color-scheme: dark)");
+    if (darkMq.addEventListener) darkMq.addEventListener("change", render);
+    else if (darkMq.addListener) darkMq.addListener(render);
+  }
   $("swap").addEventListener("click", function () {
     var tmp = awaySel.value;
     awaySel.value = homeSel.value;
