@@ -32,8 +32,8 @@
       title: "NBA 對戰預測",
       notice: MODEL
         ? "已完成 " + N_GAMES + " 場 " + D.season + " 例行賽（更新至 " + D.asOf + "）。預測只用本季已打的比賽，" +
-          "不使用上季表現（休賽季球員異動大）：實力評分 = 淨勝分 × 已打場數 ÷（已打場數 + " + MODEL.shrinkK +
-          "），打得少時往平均拉回。賽季初期樣本少，預測波動較大。"
+          "不使用上季表現（休賽季球員異動大）。兩個分數：① 實力評分法：實力評分 = 淨勝分 × 已打場數 ÷（已打場數 + " +
+          MODEL.shrinkK + "），打得少時往平均拉回；② 近 10 場 PACE 法（不滿 10 場用已打場數）。賽季初期樣本少，預測波動較大。"
         : "目前使用 " + D.season + " 例行賽已完成的 " + N_GAMES + " 場比賽數據（更新至 " + D.asOf +
           "）。賽季初期樣本少，預測波動較大。",
       statsTitle: D.season + " 本季數據對照",
@@ -41,8 +41,8 @@
       l10note: "",
       h2hTitle: D.season + " 例行賽兩隊對戰 ",
       source: D.h2hPrev
-        ? "ESPN（" + D.season + " 比分）、Basketball-Reference.com（" + D.prevSeason + " 交手紀錄）"
-        : "ESPN（" + D.season + " 比分）",
+        ? "ESPN（" + D.season + " 比分與 PACE）、Basketball-Reference.com（" + D.prevSeason + " 交手紀錄）"
+        : "ESPN（" + D.season + " 比分與 PACE）",
       foot: "整理自 " + D.season + " 例行賽已完成的 " + N_GAMES + " 場（更新至 " + D.asOf + "）"
     }
   }[MODE];
@@ -54,6 +54,17 @@
     return {
       away: (a.off / a.pace * avg + h.def / h.pace * avg) / 2,
       home: (h.off / h.pace * avg + a.def / a.pace * avg) / 2 + HOME_ADV
+    };
+  }
+
+  // ---------- 第二個分數：近 10 場 PACE 法（球季進行中） ----------
+  // 和賽季前的 PACE 法同一個公式，只是改用「近 10 場」（不滿 10 場就用已打場數）的得失分，PACE 用本季累積值：
+  // 兩隊得失分交叉配對 -> 各除以自己的 PACE（變成每回合得分）-> 乘上預估 PACE（兩隊 PACE 的平均）-> 主隊 +1
+  function predictLast10(a, h) {
+    var avg = (a.pace + h.pace) / 2;
+    return {
+      away: (a.l10off / a.pace * avg + h.l10def / h.pace * avg) / 2,
+      home: (h.l10off / h.pace * avg + a.l10def / a.pace * avg) / 2 + HOME_ADV
     };
   }
 
@@ -185,8 +196,23 @@
     var winTeam = wPace === "home" ? h : a;
     var diff = Math.abs(pace.home - pace.away);
     $("verdict-tag").textContent = winTeam.zh + " 勝";
-    $("board-margin").textContent =
+    $("board-margin").textContent = (MODEL ? "實力評分法：" : "") +
       "預測分差 " + f1(diff) + " 分，總分 " + f1(pace.home + pace.away) + " 分";
+
+    // 第二個分數（只有球季進行中才有）：兩個算法預測的勝方相同或不同都標出來
+    var alt = $("alt");
+    alt.hidden = !MODEL;
+    if (MODEL) {
+      var p2 = predictLast10(a, h);
+      var same = winnerOf(p2) === wPace;
+      var win2 = winnerOf(p2) === "home" ? h : a;
+      alt.innerHTML =
+        '<div class="alt-title">第二個分數：近 10 場 PACE 法</div>' +
+        '<div class="alt-line">' + a.zh + " " + f1(p2.away) + "、" + h.zh + " " + f1(p2.home) +
+        "（" + win2.zh + " 勝 " + f1(Math.abs(p2.home - p2.away)) + " 分）</div>" +
+        '<div class="alt-note' + (same ? "" : " differ") + '">' +
+        (same ? "兩個分數預測的勝方相同。" : "兩個分數預測的勝方不同，這種比賽回測約五五波，可視為勢均力敵。") + "</div>";
+    }
 
     // 交手紀錄（以客隊為主視角）；球季進行中除了本季，還附上上季的交手（只供參考，不進預測）
     var blocks = [h2hBlock(D.h2h, COPY.h2hTitle, a, h)];
@@ -206,7 +232,7 @@
     rows.push(["客場戰績", withRate(a.road), withRate(h.road)]);
     rows.push(["場均得分", f1(a.off), f1(h.off)]);
     rows.push(["場均失分", f1(a.def), f1(h.def)]);
-    if (!MODEL) rows.push(["PACE", f1(a.pace), f1(h.pace)]);  // 球季進行中的預測不用 PACE，不顯示
+    rows.push([MODEL ? "PACE（本季）" : "PACE", f1(a.pace), f1(h.pace)]);
     rows.push(["近 10 場戰績" + l10note, a.l10rec, h.l10rec]);
     rows.push(["近 10 場得分" + l10note, f1(a.l10off), f1(h.l10off)]);
     rows.push(["近 10 場失分" + l10note, f1(a.l10def), f1(h.l10def)]);
