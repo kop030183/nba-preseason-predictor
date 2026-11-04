@@ -218,7 +218,7 @@
       var ap = awayFirst ? m[0] : m[1];
       var hp = awayFirst ? m[1] : m[0];
       if (ap > hp) awayWins++;
-      return '<div class="h2h-game">' + a.zh + " " + ap + "、" + h.zh + " " + hp + "</div>";
+      return '<div class="h2h-game">' + a.zh + " " + ap + " : " + hp + " " + h.zh + "</div>";
     });
     return '<div class="h2h-block"><div class="h2h-title">' + title + meetings.length + " 場：" + a.zh + " " +
       awayWins + " 勝 " + (meetings.length - awayWins) + " 敗</div>" + lines.join("") + "</div>";
@@ -312,7 +312,7 @@
       var win2 = cmp.w2 === "home" ? h : a;
       alt.innerHTML =
         '<div class="alt-title">近況預測</div>' +
-        '<div class="alt-line">' + a.zh + " " + f1(p2.away) + "、" + h.zh + " " + f1(p2.home) +
+        '<div class="alt-line">' + a.zh + " " + f1(p2.away) + " : " + f1(p2.home) + " " + h.zh +
         "（" + win2.zh + " 勝 " + f1(Math.abs(p2.home - p2.away)) + " 分）</div>";
       summary.className = "summary " + (same ? "agree" : "differ");
       summary.textContent = same ? "兩種模式預測方向一致 可參考" : "兩種模式預測方向不一致 看看就好";
