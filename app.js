@@ -460,18 +460,29 @@
     return { a: a, h: h, c: c, ok1: (c.w1 === "home") === homeWon, ok2: (c.w2 === "home") === homeWon };
   }
 
-  // 賽程列表的一場比賽。能點的（兩隊都確定，而且還沒打完、或是最近一個比賽日已完賽可看賽前預測）是連結
+  // 這場能不能點進去看預測：兩隊都確定，而且（還沒打完、不是已經過去的日子）或（最近一個比賽日已完賽、有賽前預測）
+  // 已經過去的日子，資料沒更新時狀態還是「尚未開打」，這種不能點
+  function isClickable(g, date) {
+    var a = g.a ? T[ABBR[g.a]] : null;
+    var h = g.h ? T[ABBR[g.h]] : null;
+    var past = date < todayTW();
+    return !!(a && h) && (((g.s === "S" || g.s === "L") && !past) || !!(MODEL && preGameInfo(g)));
+  }
+
+  function gameHash(g, date) {
+    return hashOf({ tab: "matchup", away: g.a, home: g.h, date: date, neutral: g.n ? "1" : "", pre: g.s === "F" ? "1" : "" });
+  }
+
+  // 賽程列表的一場比賽。能點的是連結，點了帶到那場的預測
   function gameItem(g, date) {
     var a = g.a ? T[ABBR[g.a]] : null;
     var h = g.h ? T[ABBR[g.h]] : null;
     var pi = MODEL ? preGameInfo(g) : null;
-    var past = date < todayTW();  // 已經過去的日子：資料沒更新時，狀態還是「尚未開打」，這種不能點（只有有賽前預測的已完賽比賽能點）
-    var clickable = !!(a && h) && (((g.s === "S" || g.s === "L") && !past) || !!pi);
+    var past = date < todayTW();
+    var clickable = isClickable(g, date);
     var el = document.createElement(clickable ? "a" : "div");
     el.className = "game" + (clickable ? "" : " is-static");
-    if (clickable) {
-      el.href = hashOf({ tab: "matchup", away: g.a, home: g.h, date: date, neutral: g.n ? "1" : "", pre: g.s === "F" ? "1" : "" });
-    }
+    if (clickable) el.href = gameHash(g, date);
 
     var teams = a && h
       ? miniBadge(a) + " " + a.zh + " @ " + h.zh + " " + miniBadge(h)
@@ -551,6 +562,37 @@
       $("back-link").textContent = "← 回到 " + fmtDate(fromDate) + "賽程";
       $("back-link").href = hashOf({ tab: "schedule", date: fromDate });
     }
+    updateGameNav();
+  }
+
+  // ---------- 同一天的比賽之間切換（從賽程點進來才有）：上一場 / 下一場，順序和賽程列表一樣 ----------
+  var dayList = [];   // 那天能點的比賽
+  var dayIdx = -1;    // 目前這場在 dayList 的位置
+
+  function updateGameNav() {
+    dayList = [];
+    dayIdx = -1;
+    if (fromDate && gamesByDate[fromDate]) {
+      dayList = gamesByDate[fromDate].filter(function (g) { return isClickable(g, fromDate); });
+      var a = T[awaySel.value].abbr;
+      var h = T[homeSel.value].abbr;
+      for (var i = 0; i < dayList.length; i++) if (dayList[i].a === a && dayList[i].h === h) dayIdx = i;
+    }
+    var nav = $("gamenav");
+    nav.hidden = dayIdx < 0 || dayList.length < 2;
+    if (!nav.hidden) {
+      $("game-pos").textContent = "第 " + (dayIdx + 1) + " / " + dayList.length + " 場";
+      $("game-prev").disabled = dayIdx === 0;
+      $("game-next").disabled = dayIdx === dayList.length - 1;
+    }
+  }
+
+  function goGame(delta) {
+    var g = dayList[dayIdx + delta];
+    if (!g) return;
+    // 用取代而不是新增瀏覽紀錄：瀏覽器的「上一頁」還是回到賽程，不會一場一場倒退
+    history.replaceState(null, "", gameHash(g, fromDate));
+    applyHash();
   }
 
   // 依網址決定要顯示哪一層、哪一場
@@ -617,6 +659,28 @@
     $("date-next").addEventListener("click", function () { var d = nextMatchDay(curDate); if (d) goDate(d); });
     $("date-today").addEventListener("click", function () { goDate(todayTW()); });
   }
+  // 切換場次：按鈕、鍵盤左右鍵、手機左右滑動（沒有「上一場／下一場」時都不作用）
+  $("game-prev").addEventListener("click", function () { goGame(-1); });
+  $("game-next").addEventListener("click", function () { goGame(1); });
+  var typing = function (el) { return !!el && /^(SELECT|INPUT|TEXTAREA)$/.test(el.tagName); };  // 這些元素自己會用方向鍵
+  var interactive = function (el) { return !!el && /^(SELECT|INPUT|TEXTAREA|BUTTON|A)$/.test(el.tagName); };
+  document.addEventListener("keydown", function (e) {
+    if ($("gamenav").hidden || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || typing(e.target)) return;
+    if (e.key === "ArrowLeft") goGame(-1);
+    else if (e.key === "ArrowRight") goGame(1);
+  });
+  var touch = null;
+  $("view-matchup").addEventListener("touchstart", function (e) {
+    touch = e.touches.length === 1 && !interactive(e.target) ? { x: e.touches[0].clientX, y: e.touches[0].clientY } : null;
+  }, { passive: true });
+  $("view-matchup").addEventListener("touchend", function (e) {
+    if (!touch || $("gamenav").hidden) return;
+    var dx = e.changedTouches[0].clientX - touch.x;
+    var dy = e.changedTouches[0].clientY - touch.y;
+    touch = null;
+    if (Math.abs(dx) > 70 && Math.abs(dx) > 2 * Math.abs(dy)) goGame(dx < 0 ? 1 : -1);  // 往左滑 = 下一場
+  }, { passive: true });
+
   window.addEventListener("hashchange", applyHash);
 
   if (location.hash) {

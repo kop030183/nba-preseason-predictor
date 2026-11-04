@@ -42,6 +42,13 @@
 
     <p class="back" id="back" hidden><a id="back-link" href="#">← 回到賽程</a></p>
 
+    <!-- 從賽程點進來時：同一天的比賽之間切換 -->
+    <div class="gamenav" id="gamenav" hidden>
+      <button type="button" id="game-prev" class="chip">◀ 上一場</button>
+      <span class="game-pos" id="game-pos"></span>
+      <button type="button" id="game-next" class="chip">下一場 ▶</button>
+    </div>
+
     <!-- 已完賽的比賽：說明下面是賽前預測，並對照實際比分 -->
     <div class="pregame" id="pregame" hidden></div>
 
