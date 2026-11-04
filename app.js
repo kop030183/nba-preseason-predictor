@@ -473,7 +473,15 @@
     return hashOf({ tab: "matchup", away: g.a, home: g.h, date: date, neutral: g.n ? "1" : "", pre: g.s === "F" ? "1" : "" });
   }
 
-  // 賽程列表的一場比賽。能點的是連結，點了帶到那場的預測
+  // 一邊的球隊：隊徽、隊名、戰績（沒決定的隊伍顯示「待定」）
+  function teamCell(t) {
+    if (!t) return '<div class="gm-team"><span class="mini-badge tbd">?</span><div class="gm-name">待定</div></div>';
+    return '<div class="gm-team">' + miniBadge(t) + '<div class="gm-name">' + t.zh + '</div><div class="gm-rec">' +
+      t.w + "-" + t.l + "</div></div>";
+  }
+
+  // 賽程列表的一場比賽，版型仿 NBA 官網：客隊在左、主隊在右，中間是開賽時間（已完賽改顯示比分）。
+  // 能點的是連結，點了帶到那場的預測
   function gameItem(g, date) {
     var a = g.a ? T[ABBR[g.a]] : null;
     var h = g.h ? T[ABBR[g.h]] : null;
@@ -484,24 +492,32 @@
     el.className = "game" + (clickable ? "" : " is-static");
     if (clickable) el.href = gameHash(g, date);
 
-    var teams = a && h
-      ? miniBadge(a) + " " + a.zh + " @ " + h.zh + " " + miniBadge(h)
-      : "待定 @ 待定";
     var tags = (g.tag ? '<span class="game-tag">' + g.tag + "</span>" : "") +
-      (g.n && a && h ? '<span class="game-tag">中立場地</span>' : "") +
-      (g.s === "L" ? '<span class="game-tag live">進行中</span>' : "");
+      (g.n && a && h ? '<span class="game-tag">中立場地</span>' : "");
 
+    // 中間：已完賽顯示比分（贏的那隊加粗，箭頭指向勝方），其他顯示開賽時間
+    var mid;
+    if (g.s === "F" && a && h) {
+      var homeWon = g.hs > g.as;
+      mid = '<div class="gm-score"><span class="gm-pts ' + (homeWon ? "lose" : "win") + '">' + g.as + "</span>" +
+        '<span class="gm-final"><b>' + (homeWon ? "▶" : "◀") + "</b>已完賽</span>" +
+        '<span class="gm-pts ' + (homeWon ? "win" : "lose") + '">' + g.hs + "</span></div>";
+    } else {
+      mid = '<div class="game-time">' + g.t + "</div>" +
+        (g.s === "L" ? '<div class="gm-sub live">進行中</div>' : g.s === "X" ? '<div class="gm-sub">延期或取消</div>' : "");
+    }
+
+    // 卡片下方的小字
     var line = "";
     if (g.s === "F") {
-      line = "已完賽：" + (a ? a.zh : "") + " " + g.as + " : " + g.hs + " " + (h ? h.zh : "");
       if (pi) {  // 賽前預測（大比分那個算法）vs 實際結果
         var predWin = pi.c.w1 === "home" ? pi.h : pi.a;
-        line += "<br>賽前預測比分：" + pi.a.zh + " " + f1(pi.c.p1.away) + " : " + f1(pi.c.p1.home) + " " + pi.h.zh +
+        line = "賽前預測比分：" + pi.a.zh + " " + f1(pi.c.p1.away) + " : " + f1(pi.c.p1.home) + " " + pi.h.zh +
           "<br>賽前預測：" + predWin.zh + " 勝　" +
           (pi.ok1 ? '<span class="ok">預測正確</span>' : '<span class="bad">預測失敗</span>');
       }
     } else if (g.s === "X") {
-      line = "延期或取消";
+      line = "";
     } else if (past) {
       line = "這天已經過去，更新資料後會顯示結果";
     } else if (!(a && h)) {
@@ -509,12 +525,12 @@
     } else if (MODEL) {
       var c = compareModels(a, h, g.n);
       var win = c.w1 === "home" ? h : a;
-      line = "預測 " + win.zh + " 勝 " + f1(Math.abs(c.p1.home - c.p1.away)) + " 分 · " +
-        '<span class="' + (c.same ? "agree" : "differ") + '">' + (c.same ? "兩種模式方向一致" : "兩種模式方向不一致") + "</span>";
+      line = "預測 " + win.zh + " 勝 " + f1(Math.abs(c.p1.home - c.p1.away)) + " 分";
     }
 
-    el.innerHTML = '<div class="game-top"><span class="game-time">' + g.t + '</span><span class="game-teams">' + teams +
-      "</span>" + tags + "</div>" + (line ? '<div class="game-pred">' + line + "</div>" : "");
+    el.innerHTML = (tags ? '<div class="gm-tags">' + tags + "</div>" : "") +
+      '<div class="gm-row">' + teamCell(a) + '<div class="gm-mid">' + mid + "</div>" + teamCell(h) + "</div>" +
+      (line ? '<div class="game-pred">' + line + "</div>" : "");
     var li = document.createElement("li");
     li.appendChild(el);
     return li;
