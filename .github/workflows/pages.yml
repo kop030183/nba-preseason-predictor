@@ -1,0 +1,41 @@
+# 把網站檔案發布到 GitHub Pages
+# 每次 push 到 main 就自動跑；也可以在 Actions 頁面手動按 Run workflow
+name: Deploy site to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# 只給這支流程「讀程式碼」和「發布網站」兩種權限
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# 同一時間只跑一次發布；新的 push 進來時，等舊的跑完，不強行打斷
+concurrency:
+  group: pages-custom
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v4
+
+      - name: Set up Pages
+        uses: actions/configure-pages@v5
+
+      - name: Package the site
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: .
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
