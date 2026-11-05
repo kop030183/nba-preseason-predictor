@@ -137,7 +137,7 @@
       '<span class="badge" style="background:' + t.color + ";color:" + badgeTextColor(t.color) + '">' + t.abbr + "</span>" +
       '<div class="name">' + t.zh + "</div>" +
       '<div class="role">' + role + "</div>" +
-      '<div class="score">' + f1(score) + "</div>";
+      '<div class="score">' + (typeof score === "string" ? score : f1(score)) + "</div>";  // 傳字串就原樣顯示（實際比分是整數）
     return el;
   }
 
@@ -274,6 +274,7 @@
     $("picker").hidden = pregame;  // 已完賽的比賽是固定頁面，不能換隊
     $("board-card").hidden = pregame;
     $("pre-board").hidden = !pregame;
+    $("final-board").hidden = !pregame;
     // 看已完賽比賽時，整頁都用「那天開打之前」的數據（隊名、隊色照常從球隊總表拿）
     var snap = pregame ? snapshotOf(finalGame) : null;
     var src = pregame ? { } : T;
@@ -319,6 +320,10 @@
     }
     // 已完賽的固定頁面：上面那塊換成「賽前預測 比分 信心」
     if (pregame) {
+      // 第一張卡：實際比分（隊徽、隊名、大比分，贏的一方綠色）
+      setBlock("final-away", teamBlock(a, "客隊", String(finalGame.as), finalGame.as > finalGame.hs));
+      setBlock("final-home", teamBlock(h, "主隊", String(finalGame.hs), finalGame.hs > finalGame.as));
+      // 第二張卡：賽前預測、信心、各選項對錯
       $("pre-board").innerHTML = '<div class="pre-title">賽前預測</div>' +
         '<div class="pre-score">' + a.zh + " " + f1(cmp.p1.away) + " : " + f1(cmp.p1.home) + " " + h.zh + "</div>" +
         '<div class="pre-conf">' + confHtml(cmp.p1) + "</div>" +
