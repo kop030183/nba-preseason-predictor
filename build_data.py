@@ -26,6 +26,7 @@ SEASON_COMPLETE = False  # True = 整季已打完；False = 球季進行中
 GAME_FILES = ["games_2026-27.txt"]
 PACE_FILE = "pace_2025-26.txt"  # 只有「整季完成」模式（賽季前預測）用這個檔
 BOX_FILE = "boxscores_2026-27.json"  # 球季進行中：由 fetch_espn_games.py 產生，用來算本季累積 PACE（不用上季的）
+ODDS_FILE = "odds_2026-27.json"  # 已完賽比賽的賭盤紀錄，由 fetch_espn_games.py 產生
 SCHEDULE_FILE = "schedule_2026-27.json"  # 球季進行中：由 fetch_espn_games.py 產生，網頁的賽程分頁用
 # 賽程分頁最早能看到的台灣日期：這天起的已完賽比賽會顯示「賽前預測比分 + 結果」，
 # 但只有「最近一個比賽日」的比賽能點進去看完整預測，更早的只能看卡片。
@@ -197,6 +198,8 @@ def build_schedule(raw_dir):
     path = raw_dir / SCHEDULE_FILE
     if not path.exists():
         return None
+    odds_path = raw_dir / ODDS_FILE
+    odds = json.loads(odds_path.read_text(encoding="utf-8")) if odds_path.exists() else {}
     games = []
     for g in json.loads(path.read_text(encoding="utf-8")):
         tw = datetime.strptime(g["utc"], "%Y-%m-%dT%H:%MZ") + timedelta(hours=8)
@@ -205,12 +208,16 @@ def build_schedule(raw_dir):
         status = g["status"]
         s = "F" if status == "STATUS_FINAL" else "S" if status == "STATUS_SCHEDULED" else \
             "X" if ("POSTPONED" in status or "CANCELED" in status) else "L"
-        games.append({
+        item = {
             "d": tw.strftime("%Y-%m-%d"), "t": tw.strftime("%H:%M"),
             "a": TEAMS[g["away"]][0] if g["away"] else None, "h": TEAMS[g["home"]][0] if g["home"] else None,
             "s": s, "n": g["neutral"], "tag": SCHEDULE_TAGS.get(g["note"], g["note"]),
             "as": g["away_pts"], "hs": g["home_pts"],
-        })
+        }
+        rec = odds.get(g["id"]) if s == "F" else None
+        if rec:  # 已完賽比賽的收盤盤口：sp = 主隊讓分、ou = 總分（網頁已完賽預測頁顯示用；開盤和賠率留在 raw/ 的紀錄檔）
+            item["sp"], item["ou"] = rec["spread_home"][1], rec["total"][1]
+        games.append(item)
     games.sort(key=lambda x: (x["d"], x["t"], x["a"] or "", x["h"] or ""))
     return {"season": SEASON_LABEL, "timezone": "Asia/Taipei", "games": games}
 
@@ -363,7 +370,8 @@ def build_pre_days(raw_dir, games, schedule, latest):
     """
     days = sorted({g["d"] for g in schedule["games"]
                    if g["s"] == "F" and g["a"] and g["h"] and SCHEDULE_SHOW_FROM <= g["d"] < latest})
-    keep = ("gp", "off", "def", "l10off", "l10def", "net", "net10", "pace")
+    # 預測公式要用的欄位，加上對戰頁「本季數據對照」表要用的戰績欄位（已完賽的固定頁面顯示那天賽前的數據）
+    keep = ("gp", "w", "l", "home", "road", "off", "def", "pace", "l10rec", "l10off", "l10def", "net", "net10")
     out = {}
     for d in days:
         pre_games = games_before_tw_day(games, schedule, date.fromisoformat(d))

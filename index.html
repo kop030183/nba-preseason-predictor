@@ -49,7 +49,7 @@
       <button type="button" id="game-next" class="chip">下一場 ▶</button>
     </div>
 
-    <section class="picker" aria-label="選擇球隊">
+    <section class="picker" id="picker" aria-label="選擇球隊">
       <div class="side">
         <label for="away">客隊（客場）</label>
         <select id="away"></select>
@@ -67,11 +67,13 @@
 
     <section id="result" class="result" aria-live="polite" hidden>
 
-      <div class="card board">
+      <!-- 已完賽的固定頁面：賽前預測 比分 信心（取代下面那塊記分板） -->
+      <div class="card pre-board" id="pre-board" hidden></div>
+
+      <div class="card board" id="board-card">
         <div class="board-title">
           <span class="tag" id="verdict-tag"></span>
         </div>
-        <p class="summary" id="summary" hidden></p>
         <div class="board-row">
           <div class="team" id="board-away"></div>
           <div class="vs">@</div>
@@ -90,6 +92,12 @@
           </thead>
           <tbody id="stats-body"></tbody>
         </table>
+      </div>
+
+      <!-- 現在的盤口：只有「還沒打完」的比賽才會出現，打開頁面時即時去抓 -->
+      <div id="odds-card" hidden>
+        <div class="card" id="odds-body"></div>
+        <p class="odds-note" id="odds-note"></p>
       </div>
 
     </section>

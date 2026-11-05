@@ -32,6 +32,7 @@ RAW = Path(__file__).parent / "raw"
 OUT_FILE = RAW / "games_2026-27.txt"
 BOX_FILE = RAW / "boxscores_2026-27.json"
 SCHEDULE_FILE = RAW / "schedule_2026-27.json"
+ODDS_FILE = RAW / "odds_2026-27.json"  # 已完賽比賽的賭盤紀錄（開盤與收盤）
 SEASON_END = date(2027, 4, 11)  # 例行賽最後一天（美東日期）
 # 賽程從哪個美東日期開始抓：網頁賽程分頁最早能看的台灣日期（build_data.py 的 SCHEDULE_SHOW_FROM）
 # 要往前推一天，因為台灣日期通常是美東日期的隔天（2026-11-03 台灣 = 美東 11/2 的比賽）
@@ -129,6 +130,69 @@ def box_of_game(event_id, game):
     return stats
 
 
+def _num(s):
+    """盤口文字轉數字：'+4.5' -> 4.5、'o229.5' -> 229.5、'-110' -> -110.0、'EVEN' / 'PK' -> 0（讓分平手）。"""
+    if s is None:
+        return None
+    s = str(s).strip().lstrip("ou")
+    if s.upper() in ("EVEN", "PK", "PICK"):
+        return 0.0
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _pair(node):
+    """盤口節點 {'open': {...}, 'close': {...}} -> [開盤, 收盤]（line 優先，沒有就取 odds）。"""
+    out = []
+    for k in ("open", "close"):
+        x = (node or {}).get(k) or {}
+        out.append(_num(x.get("line") if x.get("line") is not None else x.get("odds")))
+    return out
+
+
+def odds_of_game(event_id):
+    """單場 summary 的 pickcenter -> 賭盤紀錄（DraftKings）；查不到盤口回傳 None。已完賽的比賽這裡是收盤（開賽前最後）盤口。"""
+    pcs = fetch_json(SUMMARY_URL.format(event_id), f"事件 {event_id} 的盤口").get("pickcenter") or []
+    pc = pcs[0] if pcs else None
+    if not pc or pc.get("overUnder") is None or not pc.get("pointSpread"):
+        return None
+    ps, tot, ml = pc["pointSpread"], pc.get("total") or {}, pc.get("moneyline") or {}
+    odds_pair = lambda n: [_num((n.get(k) or {}).get("odds")) for k in ("open", "close")]
+    return {
+        "provider": (pc.get("provider") or {}).get("name"),
+        "spread_home": _pair(ps.get("home")),            # 主隊讓分 [開盤, 收盤]，負 = 主隊讓分（熱門）
+        "spread_odds": {"home": odds_pair(ps.get("home") or {}), "away": odds_pair(ps.get("away") or {})},
+        "total": _pair(tot.get("over")),                  # 總分 [開盤, 收盤]
+        "total_odds": {"over": odds_pair(tot.get("over") or {}), "under": odds_pair(tot.get("under") or {})},
+        "moneyline": {"home": odds_pair(ml.get("home") or {}), "away": odds_pair(ml.get("away") or {})},
+    }
+
+
+def write_odds():
+    """已完賽比賽的賭盤紀錄 -> raw/odds_2026-27.json（以 ESPN 事件編號為鍵，增量：記過的不重抓）。
+    ESPN 賽事列表在比賽打完後會把盤口拿掉，所以趁還查得到時存下來，網頁已完賽的預測頁就從這裡讀。"""
+    if not SCHEDULE_FILE.exists():
+        return
+    cache = json.loads(ODDS_FILE.read_text(encoding="utf-8")) if ODDS_FILE.exists() else {}
+    new = missing = 0
+    for g in json.loads(SCHEDULE_FILE.read_text(encoding="utf-8")):
+        if g["status"] != "STATUS_FINAL" or not g["away"] or not g["home"] or g["id"] in cache:
+            continue
+        rec = odds_of_game(g["id"])
+        time.sleep(0.3)
+        if rec is None:
+            missing += 1  # 這場查不到盤口：不存，下次更新再試
+            continue
+        cache[g["id"]] = {"utc": g["utc"], "away": g["away"], "home": g["home"], **rec}
+        new += 1
+    ordered = sorted(cache.items(), key=lambda kv: (kv[1]["utc"], kv[0]))
+    ODDS_FILE.write_text("{\n" + ",\n".join(f'"{k}": {json.dumps(v, ensure_ascii=False)}' for k, v in ordered) + "\n}\n",
+                         encoding="utf-8")
+    print(f"賭盤紀錄：新存 {new} 場，查不到 {missing} 場，共 {len(cache)} 場 -> {ODDS_FILE}")
+
+
 def main(end, with_schedule=True):
     cache = json.loads(BOX_FILE.read_text(encoding="utf-8")) if BOX_FILE.exists() else {}
     lines, n, new_boxes = [], 0, 0
@@ -154,6 +218,7 @@ def main(end, with_schedule=True):
     print(f"完成：{SEASON_START} ~ {end}，已完賽 {n} 場 -> {OUT_FILE}；boxscore 新抓 {new_boxes} 場，共 {len(cache)} 場 -> {BOX_FILE}")
     if with_schedule:
         write_schedule()
+    write_odds()
 
 
 if __name__ == "__main__":

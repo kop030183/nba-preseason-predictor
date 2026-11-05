@@ -19,7 +19,8 @@
   var fromDate = null;   // 從哪一天的賽程點進來的（用來顯示「回到賽程」）
   var PRE = D.pre || null;  // 最近一個比賽日「開打之前」的球隊數據（build_data.py 產生），給已完賽的比賽看賽前預測
   var PRE_DAYS = D.preDays || {};  // 更早的比賽日各自「開打之前」的球隊數據（只有預測公式要用的欄位），給賽程卡片顯示賽前預測，不能點進去
-  var pregame = false;      // 目前是不是在看一場已完賽比賽的賽前預測
+  var pregame = false;      // 目前是不是在看一場已完賽比賽（固定頁面：賽前預測、賽前數據、當時盤口，不能換隊）
+  var finalGame = null;     // 上面那場已完賽比賽在賽程裡的資料（pregame 為 true 時才有）
 
   // ---------- 依資料模式切換的文字 ----------
   // D.mode："preseason" = 拿上一季整季數據當賽季前預測；"in_season" = 球季進行中，用本季已打的比賽
@@ -33,7 +34,7 @@
         "（66.5% 是賽季中、用本季累積數據的回測數字，不適用於賽季前預測。）新球季開打後，數據會更新。",
       statsTitle: "上季數據對照",
       l10note: "上季季末",
-      h2hTitle: "上季兩隊對戰 ",
+      h2hTitle: D.season + " 例行賽兩隊對戰 ",
       source: "Basketball-Reference.com",
       foot: "整理自 " + D.season + " 例行賽 " + N_GAMES + " 場"
     },
@@ -45,8 +46,8 @@
       l10note: "",
       h2hTitle: D.season + " 例行賽兩隊對戰 ",
       source: D.h2hPrev
-        ? "ESPN（" + D.season + " 比分與 PACE）、Basketball-Reference.com（" + D.prevSeason + " 交手紀錄）"
-        : "ESPN（" + D.season + " 比分與 PACE）",
+        ? "ESPN（" + D.season + " 比分與 PACE、DraftKings 盤口）、Basketball-Reference.com（" + D.prevSeason + " 交手紀錄）"
+        : "ESPN（" + D.season + " 比分與 PACE、DraftKings 盤口）",
       foot: "整理自 " + D.season + " 例行賽已完成的 " + N_GAMES + " 場（更新至 " + D.asOf + "）"
     }
   }[MODE];
@@ -227,6 +228,20 @@
 
   function winnerOf(p) { return p.home >= p.away ? "home" : "away"; }
 
+  // 預測信心：看大比分（①實力評分法）兩隊比分各四捨五入到 0.1 之後的分差（取絕對值），門檻來自三季回測：
+  //   0 ~ 3.5 分 低信心 ／ 3.6 ~ 6.5 分 中信心 ／ 6.6 分以上 高信心（猜對率見 README）
+  function confidenceOf(p) {
+    var gap = Math.round(Math.abs(Number(f1(p.home)) - Number(f1(p.away))) * 10) / 10;
+    if (gap <= 3.5) return { key: "low", label: "低信心" };
+    if (gap <= 6.5) return { key: "mid", label: "中信心" };
+    return { key: "high", label: "高信心" };
+  }
+
+  function confHtml(p) {  // 帶顏色的信心字樣：高 = 綠、中 = 橘、低 = 紅
+    var c = confidenceOf(p);
+    return '<span class="conf conf-' + c.key + '">' + c.label + "</span>";
+  }
+
   // 球季進行中：兩個分數與「兩種模式方向是否一致」（賽程列表和對戰畫面共用）；neutral 時不加主場優勢
   function compareModels(a, h, isNeutral) {
     var ha = isNeutral ? 0 : null;
@@ -235,15 +250,19 @@
     return { p1: p1, p2: p2, w1: winnerOf(p1), w2: winnerOf(p2), same: winnerOf(p1) === winnerOf(p2) };
   }
 
-  // 那天（PRE.date）已完賽、可以看賽前預測的比賽；沒有就回傳 null
-  function findFinal(aAbbr, hAbbr) {
+  // 賽程裡已完賽的那一場（台灣日期 date；網址沒帶日期就當作最近一個比賽日）；找不到就回傳 null
+  function findFinal(aAbbr, hAbbr, date) {
     if (!SCHEDULE || !PRE) return null;
+    var d = isDate(date) ? date : PRE.date;
     for (var i = 0; i < SCHEDULE.games.length; i++) {
       var g = SCHEDULE.games[i];
-      if (g.s === "F" && g.d === PRE.date && g.a === aAbbr && g.h === hAbbr) return g;
+      if (g.s === "F" && g.d === d && g.a === aAbbr && g.h === hAbbr && preGameInfo(g)) return g;
     }
     return null;
   }
+
+  // 某場已完賽比賽「開打之前」的球隊數據：最近一個比賽日在 PRE，更早的在 PRE_DAYS
+  function snapshotOf(g) { return g.d === PRE.date ? PRE.teams : PRE_DAYS[g.d]; }
 
   function render() {
     var aKey = awaySel.value;
@@ -251,7 +270,14 @@
     var hint = $("hint");
     var result = $("result");
     $("neutral-note").hidden = !neutral;
-    var src = pregame && PRE ? PRE.teams : T;  // 看已完賽比賽的賽前預測時，整頁都用賽前數據
+    $("odds-card").hidden = true;  // 盤口等這次預測算完、確定有這場比賽才會再打開
+    $("picker").hidden = pregame;  // 已完賽的比賽是固定頁面，不能換隊
+    $("board-card").hidden = pregame;
+    $("pre-board").hidden = !pregame;
+    // 看已完賽比賽時，整頁都用「那天開打之前」的數據（隊名、隊色照常從球隊總表拿）
+    var snap = pregame ? snapshotOf(finalGame) : null;
+    var src = pregame ? { } : T;
+    if (snap) { src[aKey] = Object.assign({}, T[aKey], snap[aKey]); src[hKey] = Object.assign({}, T[hKey], snap[hKey]); }
 
     if (aKey === hKey) {
       hint.textContent = "客隊和主隊不能是同一支球隊，請重新選擇。";
@@ -285,24 +311,23 @@
     $("board-margin").hidden = !!MODEL;
     $("board-margin").textContent = "預測分差 " + f1(diff) + " 分，總分 " + f1(pace.home + pace.away) + " 分";
 
-    // 近況預測（只有球季進行中才有）；兩個算法預測的勝方相同或不同，在比分上方給一句總結
+    // 預測信心（只有球季進行中才有）；②近況預測仍會算（compareModels），只是不顯示
     var alt = $("alt");
-    var summary = $("summary");
     alt.hidden = !MODEL;
-    summary.hidden = !MODEL;
     if (MODEL) {
-      var p2 = cmp.p2;
-      var same = cmp.same;
-      alt.innerHTML =
-        '<div class="alt-title">近況預測</div>' +
-        '<div class="alt-line">' + a.zh + " " + f1(p2.away) + " : " + f1(p2.home) + " " + h.zh + "</div>";
-      summary.className = "summary " + (same ? "agree" : "differ");
-      summary.textContent = same ? "兩種模式預測方向一致 可參考" : "兩種模式預測方向不一致 看看就好";
+      alt.innerHTML = '<div class="alt-title">預測信心</div><div class="alt-line">' + confHtml(cmp.p1) + "</div>";
+    }
+    // 已完賽的固定頁面：上面那塊換成「賽前預測 比分 信心」
+    if (pregame) {
+      $("pre-board").innerHTML = '<div class="pre-title">賽前預測</div>' +
+        '<div class="pre-score">' + a.zh + " " + f1(cmp.p1.away) + " : " + f1(cmp.p1.home) + " " + h.zh + "</div>" +
+        '<div class="pre-conf">' + confHtml(cmp.p1) + "</div>" +
+        (finalGame.sp != null ? '<div class="pre-picks">' + betPicksHtml(a, h, cmp.p1, finalGame) + "</div>" : "");
     }
 
     // 交手紀錄（以客隊為主視角）；球季進行中除了本季，還附上上季的交手（只供參考，不進預測）
-    var blocks = [h2hBlock(pregame && PRE ? PRE.h2h : D.h2h, COPY.h2hTitle, a, h)];
-    if (MODEL && D.h2hPrev) blocks.push(h2hBlock(D.h2hPrev, "上季（" + D.prevSeason + "）兩隊對戰 ", a, h));
+    var blocks = [h2hBlock(D.h2h, COPY.h2hTitle, a, h)];
+    if (MODEL && D.h2hPrev) blocks.push(h2hBlock(D.h2hPrev, D.prevSeason + " 例行賽兩隊對戰 ", a, h));
     blocks = blocks.filter(Boolean);
     $("h2h").innerHTML = blocks.join("");
     $("h2h").hidden = !blocks.length;
@@ -338,6 +363,155 @@
     }).join("");
 
     result.hidden = false;
+    if (MODEL) {
+      if (pregame) showRecordedOdds(a, h, aColor, hColor);
+      else renderOdds(aKey, hKey, a, h, aColor, hColor);
+    }
+  }
+
+  // ---------- 現在的盤口（DraftKings，經 ESPN 轉載；打開頁面時即時抓，不寫進資料檔） ----------
+  // 單隊總分查不到莊家實際開的盤口，這裡用「讓分 + 總分」推算：主隊 = 總分/2 - 主隊讓分/2，客隊 = 總分/2 + 主隊讓分/2
+  var ESPN_SB = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates=";
+  var ESPN_NAME_FIX = { "LA Clippers": "Los Angeles Clippers" };
+  var oddsCache = {};   // 日期 ->{ t: 抓取時間, p: Promise(events) }；60 秒內重用，不重複打 ESPN
+  var oddsToken = 0;    // 切換球隊很快時，只畫最後一次的結果
+
+  function upcomingGameOf(aAbbr, hAbbr) {  // 賽程裡這組客隊/主隊「還沒打完」的下一場
+    if (!SCHEDULE) return null;
+    for (var i = 0; i < SCHEDULE.games.length; i++) {
+      var g = SCHEDULE.games[i];
+      if ((g.s === "S" || g.s === "L") && g.a === aAbbr && g.h === hAbbr) return g;
+    }
+    return null;
+  }
+
+  function fetchScoreboard(day) {  // day = 美東日期 "2026-11-05"；ESPN 不接受日期範圍，一天抓一次
+    var key = day.replace(/-/g, "");
+    var hit = oddsCache[key];
+    if (hit && Date.now() - hit.t < 60000) return hit.p;
+    var p = fetch(ESPN_SB + key).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }).then(function (j) { return j.events || []; });
+    oddsCache[key] = { t: Date.now(), p: p };
+    p["catch"](function () { delete oddsCache[key]; });
+    return p;
+  }
+
+  function lineNum(s) {  // "+1.5" -> 1.5、"o222.5" -> 222.5、"EVEN" / "PK" -> 0；看不懂回傳 null
+    if (s == null) return null;
+    if (/^(even|pk)/i.test(String(s))) return 0;
+    var n = parseFloat(String(s).replace(/^[ou]/i, ""));
+    return isNaN(n) ? null : n;
+  }
+
+  // 畫盤口卡片：homeLine = 主隊讓分（負 = 主隊讓分），totalLine = 總分；note = 卡片外的兩行小字
+  // 單隊總分：由讓分與總分推算，再調成 .5 結尾（x.0 進位到 x.5，例如 112.0 -> 112.5）；順序是 讓分、單隊總分、總分
+  // res = 已完賽比賽的實際比分 { as, hs }：有的話，讓分打 ✅ 在讓分過關的那一邊，單隊總分與總分打 ⬆️（大）/ ⬇️（小）；剛好打平盤的不標
+  function sgn(v) { return (v > 0 ? "+" : "") + f1(v); }          // 讓分顯示：+1.5 / -1.5
+  function half(v) { return f1(Math.floor(v) + 0.5); }             // 單隊總分調成 .5 結尾（x.0 進位到 x.5）
+
+  function drawOdds(a, h, aColor, hColor, homeLine, totalLine, note, res) {
+    var UP = " ⬆️", DOWN = " ⬇️", OK = " ✅";
+    var overUnder = function (actual, line) { return actual > line ? UP : actual < line ? DOWN : ""; };
+    var rows = "";
+    if (homeLine != null) {
+      var cover = res ? (res.hs - res.as + homeLine) : 0;  // > 0 主隊讓分過關（受讓方贏盤），< 0 客隊過關
+      rows += "<tr><td>" + sgn(-homeLine) + (res && cover < 0 ? OK : "") + "</td><td>讓分</td><td>" +
+        sgn(homeLine) + (res && cover > 0 ? OK : "") + "</td></tr>";
+    }
+    if (homeLine != null && totalLine != null) {
+      var aTT = half(totalLine / 2 + homeLine / 2), hTT = half(totalLine / 2 - homeLine / 2);
+      rows += "<tr><td>" + aTT + (res ? overUnder(res.as, Number(aTT)) : "") + "</td><td>單隊總分</td><td>" +
+        hTT + (res ? overUnder(res.hs, Number(hTT)) : "") + "</td></tr>";
+    }
+    if (totalLine != null) {
+      rows += '<tr><td colspan="3"><b>總分 ' + totalLine + (res ? overUnder(res.as + res.hs, totalLine) : "") + "</b></td></tr>";
+    }
+    if (!rows) return false;
+    $("odds-body").innerHTML = '<div class="odds-title">' + (res ? "賭盤結果" : "賭盤") + '</div><table class="stats"><thead><tr><th style="color:' + aColor + '">' + a.zh +
+      '</th><th></th><th style="color:' + hColor + '">' + h.zh + "</th></tr></thead><tbody>" + rows + "</tbody></table>";
+    $("odds-note").innerHTML = note + "<br>非投注建議，娛樂參考 !";
+    return true;
+  }
+
+  // 已完賽：把賽前預測拿去對盤口，每個選項對不對（讓分選哪一邊、單隊總分與總分選大或小）。
+  // 預測比分用畫面上顯示的 0.1 位數；剛好等於盤口的不選、實際剛好打平盤的不標對錯
+  function betPicksHtml(a, h, p, g) {
+    if (g.sp == null || g.ou == null) return "";
+    var mark = function (ok) { return ok === null ? "" : ok ? " ✅" : " ❌"; };
+    var pa = Number(f1(p.away)), ph = Number(f1(p.home));
+    var lines = [];
+    var cover = g.hs - g.as + g.sp;   // 實際：> 0 主隊過關，< 0 客隊過關
+    var pick = ph - pa + g.sp;        // 預測：> 0 選主隊那邊，< 0 選客隊那邊
+    if (pick !== 0) {
+      lines.push((pick > 0 ? h.zh + " " + sgn(g.sp) : a.zh + " " + sgn(-g.sp)) + mark(cover === 0 ? null : (cover > 0) === (pick > 0)));
+    }
+    var overUnder = function (name, pred, line, actual) {
+      if (pred === line) return;
+      lines.push(name + " " + line + " " + (pred > line ? "大" : "小") + mark(actual === line ? null : (actual > line) === (pred > line)));
+    };
+    overUnder(a.zh, pa, Number(half(g.ou / 2 + g.sp / 2)), g.as);
+    overUnder(h.zh, ph, Number(half(g.ou / 2 - g.sp / 2)), g.hs);
+    overUnder("總分", pa + ph, g.ou, g.as + g.hs);
+    return lines.map(function (t) { return "<div>" + t + "</div>"; }).join("");
+  }
+
+  function showOdds(a, h, aColor, hColor, o) {  // 即時盤口（ESPN 賽事列表的 odds）
+    var ps = o.pointSpread, tot = o.total;
+    var hl = ps && ps.home && ps.home.close;
+    var ov = tot && tot.over && tot.over.close;
+    var homeLine = hl ? lineNum(hl.line) : null;
+    var totalLine = ov ? lineNum(ov.line) : (typeof o.overUnder === "number" ? o.overUnder : null);
+    var hh = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(11, 16);
+    return drawOdds(a, h, aColor, hColor, homeLine, totalLine, "經 ESPN 取得 DraftKings 的賭盤概況，台灣時間 " + hh + " 更新");
+  }
+
+  // 已完賽的比賽：用 update 時存進賽程資料的收盤盤口（sp = 主隊讓分、ou = 總分；原始紀錄在 raw/odds_2026-27.json）
+  function showRecordedOdds(a, h, aColor, hColor) {
+    ++oddsToken;  // 作廢還在路上的即時盤口
+    var g = finalGame;
+    var card = $("odds-card");
+    if (!g || g.sp == null || !drawOdds(a, h, aColor, hColor, g.sp, g.ou, "經 ESPN 取得 DraftKings 的賭盤概況，開賽前最後的盤口",
+      { as: g.as, hs: g.hs })) {
+      card.hidden = true;
+      return;
+    }
+    card.hidden = false;
+  }
+
+  function renderOdds(aKey, hKey, a, h, aColor, hColor) {
+    var card = $("odds-card");
+    var g = upcomingGameOf(a.abbr, h.abbr);
+    var token = ++oddsToken;
+    if (!g) { card.hidden = true; return; }
+    $("odds-body").innerHTML = '<p class="odds-msg">載入中…</p>';
+    $("odds-note").textContent = "";
+    card.hidden = false;
+    var fail = function (msg) {
+      if (token !== oddsToken) return;
+      $("odds-body").innerHTML = '<p class="odds-msg">' + msg + "</p>";
+      $("odds-note").textContent = "";
+    };
+    // 賽程日期是台灣日期，ESPN 用美東日期：台灣日期的前一天到當天一起抓，再用隊名對出這場
+    Promise.all([fetchScoreboard(addDays(g.d, -1)), fetchScoreboard(g.d)]).then(function (days) {
+      if (token !== oddsToken) return;
+      var events = days[0].concat(days[1]);
+      var ev = null;
+      events.forEach(function (e) {
+        var comp = e.competitions && e.competitions[0];
+        if (!comp || e.status.type.name === "STATUS_FINAL") return;
+        var names = {};
+        comp.competitors.forEach(function (c) {
+          var raw = c.team.displayName;
+          names[c.homeAway] = ESPN_NAME_FIX[raw] || raw;
+        });
+        if (names.away === aKey && names.home === hKey) ev = comp;
+      });
+      var o = ev && ev.odds && ev.odds[0];
+      if (!o) return fail("這場目前還沒有盤口。");
+      if (!showOdds(a, h, aColor, hColor, o)) fail("這場目前還沒有盤口。");
+    }, function () { fail("盤口暫時抓不到，稍後重新整理再試。"); });
   }
 
   // ---------- 初始化 ----------
@@ -401,6 +575,14 @@
     return null;
   }
 
+  function nextUpcomingDate() {  // 今天或之後，第一個還有比賽沒打完（尚未開打或進行中）的日期
+    var t = todayTW();
+    for (var i = 0; i < dates.length; i++) {
+      if (dates[i] >= t && gamesByDate[dates[i]].some(function (g) { return g.s === "S" || g.s === "L"; })) return dates[i];
+    }
+    return null;
+  }
+
   function hasUpcoming() { return !!lastDate && lastDate >= todayTW(); }
 
   // 最早能選的日期：賽程資料的第一天（build_data.py 的 SCHEDULE_SHOW_FROM，過去這幾天看賽前預測和結果）；
@@ -446,15 +628,13 @@
       ok1: (c.w1 === "home") === homeWon, ok2: (c.w2 === "home") === homeWon };
   }
 
-  // 這場能不能點進去看預測：兩隊都確定，而且（還沒打完、不是已經過去的日子）或（最近一個比賽日已完賽、有賽前預測）
-  // 已經過去的日子，資料沒更新時狀態還是「尚未開打」，這種不能點；
-  // 更早的比賽日只留卡片上的賽前預測比分和結果，不能點進去（不做完整預測頁）
+  // 這場能不能點進去：兩隊都確定，而且（還沒打完、不是已經過去的日子）或（已完賽、有賽前數據，點進去是固定頁面）
+  // 已經過去的日子，資料沒更新時狀態還是「尚未開打」，這種不能點
   function isClickable(g, date) {
     var a = g.a ? T[ABBR[g.a]] : null;
     var h = g.h ? T[ABBR[g.h]] : null;
     var past = date < todayTW();
-    return !!(a && h) && (((g.s === "S" || g.s === "L") && !past) ||
-      !!(MODEL && PRE && g.d === PRE.date && preGameInfo(g)));
+    return !!(a && h) && (((g.s === "S" || g.s === "L") && !past) || !!(MODEL && preGameInfo(g)));
   }
 
   function gameHash(g, date) {
@@ -501,7 +681,7 @@
       if (pi) {  // 賽前預測（大比分那個算法）vs 實際結果
         var predWin = pi.c.w1 === "home" ? pi.hn : pi.an;
         line = "賽前預測比分：" + pi.an.zh + " " + f1(pi.c.p1.away) + " : " + f1(pi.c.p1.home) + " " + pi.hn.zh +
-          "<br>賽前預測：" + predWin.zh + " 勝　" +
+          "<br>賽前預測：" + predWin.zh + " 勝（" + confHtml(pi.c.p1) + "）　" +
           (pi.ok1 ? '<span class="ok">預測正確</span>' : '<span class="bad">預測失敗</span>');
       }
     } else if (g.s === "X") {
@@ -510,10 +690,10 @@
       line = "這天已經過去，更新資料後會顯示結果";
     } else if (!(a && h)) {
       line = "兩隊要等前一輪打完才決定";
-    } else if (MODEL) {
+    } else if (MODEL && date === nextUpcomingDate()) {  // 只有「下一個比賽日」顯示預測和信心，更後面的日子先不顯示
       var c = compareModels(a, h, g.n);
       var win = c.w1 === "home" ? h : a;
-      line = "預測 " + win.zh + " 勝 " + f1(Math.abs(c.p1.home - c.p1.away)) + " 分";
+      line = "預測：" + win.zh + " 勝（" + confHtml(c.p1) + "）";
     }
 
     el.innerHTML = (tags ? '<div class="gm-tags">' + tags + "</div>" : "") +
@@ -623,7 +803,8 @@
       homeSel.value = hk;
     }
     neutral = p.get("neutral") === "1";
-    pregame = p.get("pre") === "1" && !!ak && !!hk && !!findFinal(p.get("away"), p.get("home"));  // 只有真的是那天已完賽的比賽才算
+    finalGame = p.get("pre") === "1" && ak && hk ? findFinal(p.get("away"), p.get("home"), p.get("date")) : null;  // 只有真的是那天已完賽的比賽才算
+    pregame = !!finalGame;
     fromDate = hasUpcoming() && isDate(p.get("date")) ? p.get("date") : null;
     updateBack();
     showTab("matchup");
@@ -634,6 +815,7 @@
   function onPick() {
     neutral = false;
     pregame = false;
+    finalGame = null;
     fromDate = null;
     updateBack();
     replaceHash({ tab: "matchup", away: T[awaySel.value].abbr, home: T[homeSel.value].abbr });
