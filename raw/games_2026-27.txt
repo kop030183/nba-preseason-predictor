@@ -1,4 +1,4 @@
-##espn:107
+##espn:121
 Tue, Oct 20, 2026|Boston Celtics|113|Detroit Pistons|121
 Tue, Oct 20, 2026|Philadelphia 76ers|106|New York Knicks|100
 Tue, Oct 20, 2026|Oklahoma City Thunder|116|San Antonio Spurs|104
@@ -106,3 +106,17 @@ Mon, Nov 2, 2026|Portland Trail Blazers|118|Denver Nuggets|110
 Mon, Nov 2, 2026|Phoenix Suns|113|Golden State Warriors|116
 Mon, Nov 2, 2026|Toronto Raptors|125|Los Angeles Clippers|118
 Mon, Nov 2, 2026|Miami Heat|117|Los Angeles Lakers|138
+Wed, Nov 4, 2026|Philadelphia 76ers|112|Detroit Pistons|106
+Wed, Nov 4, 2026|Atlanta Hawks|120|Washington Wizards|105
+Wed, Nov 4, 2026|Milwaukee Bucks|102|Boston Celtics|109
+Wed, Nov 4, 2026|Charlotte Hornets|104|Brooklyn Nets|114
+Wed, Nov 4, 2026|Chicago Bulls|105|New York Knicks|135
+Wed, Nov 4, 2026|Indiana Pacers|107|Memphis Grizzlies|103
+Wed, Nov 4, 2026|Utah Jazz|113|New Orleans Pelicans|120
+Wed, Nov 4, 2026|Cleveland Cavaliers|116|Oklahoma City Thunder|124
+Wed, Nov 4, 2026|Minnesota Timberwolves|117|Houston Rockets|107
+Wed, Nov 4, 2026|Toronto Raptors|109|Denver Nuggets|128
+Wed, Nov 4, 2026|Portland Trail Blazers|132|Phoenix Suns|119
+Wed, Nov 4, 2026|Dallas Mavericks|111|San Antonio Spurs|112
+Wed, Nov 4, 2026|Los Angeles Lakers|116|Sacramento Kings|103
+Wed, Nov 4, 2026|Miami Heat|117|Los Angeles Clippers|116
