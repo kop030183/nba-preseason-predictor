@@ -245,28 +245,12 @@
     return null;
   }
 
-  // 已完賽的比賽：說明「下面是賽前預測」，並對照實際比分、標出兩種算法猜對或猜錯
-  function showPregameBanner(a, h, cmp) {
-    var box = $("pregame");
-    var g = pregame ? findFinal(a.abbr, h.abbr) : null;
-    box.hidden = !g;
-    if (!g) return;
-    var homeWon = g.hs > g.as;
-    var mark = function (w) { return (w === "home") === homeWon ? '<span class="ok">預測正確</span>' : '<span class="bad">預測失敗</span>'; };
-    box.innerHTML =
-      "<p><strong>這場已經打完（" + fmtDate(g.d) + "）。</strong>下面是賽前預測，用的是這場開打前的數據（更新至 " +
-      fmtDate(PRE.asOf) + "）。</p>" +
-      "<p>實際比分：" + a.zh + " " + g.as + " : " + g.hs + " " + h.zh + " · 實力評分法 " + mark(cmp.w1) +
-      " · 近況預測 " + mark(cmp.w2) + "</p>";
-  }
-
   function render() {
     var aKey = awaySel.value;
     var hKey = homeSel.value;
     var hint = $("hint");
     var result = $("result");
     $("neutral-note").hidden = !neutral;
-    $("pregame").hidden = true;  // 需要時下面再顯示
     var src = pregame && PRE ? PRE.teams : T;  // 看已完賽比賽的賽前預測時，整頁都用賽前數據
 
     if (aKey === hKey) {
@@ -288,7 +272,6 @@
     hint.hidden = true;
 
     var cmp = MODEL ? compareModels(a, h, neutral) : null;
-    if (cmp) showPregameBanner(a, h, cmp);
     var pace = MODEL ? cmp.p1 : predictPace(a, h, neutral ? 0 : null);
     var wPace = winnerOf(pace);
 
