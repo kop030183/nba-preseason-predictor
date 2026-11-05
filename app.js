@@ -18,6 +18,7 @@
   var neutral = false;   // 目前這場是不是中立場地（從賽程點進來才可能是）；中立場地不加主場優勢
   var fromDate = null;   // 從哪一天的賽程點進來的（用來顯示「回到賽程」）
   var PRE = D.pre || null;  // 最近一個比賽日「開打之前」的球隊數據（build_data.py 產生），給已完賽的比賽看賽前預測
+  var PRE_DAYS = D.preDays || {};  // 更早的比賽日各自「開打之前」的球隊數據（只有預測公式要用的欄位），給賽程卡片顯示賽前預測，不能點進去
   var pregame = false;      // 目前是不是在看一場已完賽比賽的賽前預測
 
   // ---------- 依資料模式切換的文字 ----------
@@ -421,12 +422,11 @@
 
   function hasUpcoming() { return !!lastDate && lastDate >= todayTW(); }
 
-  // 最早能選的日期：今天之前「最近一個有比賽的日子」（看那天的賽前預測和結果），沒有就是今天。更早的過去日期不能選
+  // 最早能選的日期：賽程資料的第一天（build_data.py 的 SCHEDULE_SHOW_FROM，過去這幾天看賽前預測和結果）；
+  // 賽程第一天還在未來（球季還沒開打）就是今天。更早的日期沒有資料，不能選
   function minDate() {
     var t = todayTW();
-    var prev = null;
-    for (var i = 0; i < dates.length; i++) if (dates[i] < t) prev = dates[i];
-    return prev || t;
+    return dates.length && dates[0] < t ? dates[0] : t;
   }
 
   function clampDate(d) {
@@ -449,24 +449,31 @@
     return '<span class="mini-badge" style="background:' + t.color + ";color:" + badgeTextColor(t.color) + '">' + t.abbr + "</span>";
   }
 
-  // 最近一個比賽日已完賽的比賽：用「開打之前」的數據算賽前預測，對照實際結果；算不出來（球隊還沒有數據）就回傳 null
+  // 已完賽的比賽：用「那天開打之前」的數據算賽前預測，對照實際結果；算不出來（球隊還沒有數據）就回傳 null
+  // 最近一個比賽日的數據在 PRE，更早的比賽日在 PRE_DAYS
   function preGameInfo(g) {
-    if (!PRE || g.s !== "F" || g.d !== PRE.date || !g.a || !g.h) return null;
-    var a = PRE.teams[ABBR[g.a]];
-    var h = PRE.teams[ABBR[g.h]];
+    if (!PRE || g.s !== "F" || !g.a || !g.h) return null;
+    var teams = g.d === PRE.date ? PRE.teams : PRE_DAYS[g.d];
+    if (!teams) return null;
+    var a = teams[ABBR[g.a]];
+    var h = teams[ABBR[g.h]];
     if (!a.gp || !h.gp) return null;
     var c = compareModels(a, h, g.n);
     var homeWon = g.hs > g.as;
-    return { a: a, h: h, c: c, ok1: (c.w1 === "home") === homeWon, ok2: (c.w2 === "home") === homeWon };
+    // an / hn：兩隊的名稱資料（隊名、隊徽）一律從球隊總表拿，PRE_DAYS 裡只有算預測要用的數字
+    return { a: a, h: h, an: T[ABBR[g.a]], hn: T[ABBR[g.h]], c: c,
+      ok1: (c.w1 === "home") === homeWon, ok2: (c.w2 === "home") === homeWon };
   }
 
   // 這場能不能點進去看預測：兩隊都確定，而且（還沒打完、不是已經過去的日子）或（最近一個比賽日已完賽、有賽前預測）
-  // 已經過去的日子，資料沒更新時狀態還是「尚未開打」，這種不能點
+  // 已經過去的日子，資料沒更新時狀態還是「尚未開打」，這種不能點；
+  // 更早的比賽日只留卡片上的賽前預測比分和結果，不能點進去（不做完整預測頁）
   function isClickable(g, date) {
     var a = g.a ? T[ABBR[g.a]] : null;
     var h = g.h ? T[ABBR[g.h]] : null;
     var past = date < todayTW();
-    return !!(a && h) && (((g.s === "S" || g.s === "L") && !past) || !!(MODEL && preGameInfo(g)));
+    return !!(a && h) && (((g.s === "S" || g.s === "L") && !past) ||
+      !!(MODEL && PRE && g.d === PRE.date && preGameInfo(g)));
   }
 
   function gameHash(g, date) {
@@ -511,8 +518,8 @@
     var line = "";
     if (g.s === "F") {
       if (pi) {  // 賽前預測（大比分那個算法）vs 實際結果
-        var predWin = pi.c.w1 === "home" ? pi.h : pi.a;
-        line = "賽前預測比分：" + pi.a.zh + " " + f1(pi.c.p1.away) + " : " + f1(pi.c.p1.home) + " " + pi.h.zh +
+        var predWin = pi.c.w1 === "home" ? pi.hn : pi.an;
+        line = "賽前預測比分：" + pi.an.zh + " " + f1(pi.c.p1.away) + " : " + f1(pi.c.p1.home) + " " + pi.hn.zh +
           "<br>賽前預測：" + predWin.zh + " 勝　" +
           (pi.ok1 ? '<span class="ok">預測正確</span>' : '<span class="bad">預測失敗</span>');
       }

@@ -8,7 +8,7 @@
 只收 STATUS_FINAL（已完賽）的比賽，打到一半或還沒打的不收。ESPN 日期是美東日期，和
 Basketball-Reference 一致。任何一天或任何一場抓取失敗就直接報錯，不會默默少資料。
 
-另外也會抓「還沒打的賽程」（從前兩天到例行賽最後一天），寫成 raw/schedule_2026-27.json，給網頁的賽程分頁用。
+另外也會抓賽程（從 SCHEDULE_START 到例行賽最後一天，含已打完的，網頁才能看過去幾天的賽前預測），寫成 raw/schedule_2026-27.json，給網頁的賽程分頁用。
 賽程每次都整個重抓（賽程會改期、盃賽決賽的兩隊要打完四強才知道），ESPN 不支援一次抓一段日期，
 所以是一天一天抓，約 170 次請求、首次約一分鐘。
 
@@ -33,6 +33,9 @@ OUT_FILE = RAW / "games_2026-27.txt"
 BOX_FILE = RAW / "boxscores_2026-27.json"
 SCHEDULE_FILE = RAW / "schedule_2026-27.json"
 SEASON_END = date(2027, 4, 11)  # 例行賽最後一天（美東日期）
+# 賽程從哪個美東日期開始抓：網頁賽程分頁最早能看的台灣日期（build_data.py 的 SCHEDULE_SHOW_FROM）
+# 要往前推一天，因為台灣日期通常是美東日期的隔天（2026-11-03 台灣 = 美東 11/2 的比賽）
+SCHEDULE_START = date(2026, 11, 2)
 URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/scoreboard?dates={}"
 SUMMARY_URL = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/summary?event={}"
 NAME_FIX = {"LA Clippers": "Los Angeles Clippers"}  # ESPN 隊名 -> build_data.py 的 TEAMS 隊名
@@ -98,7 +101,7 @@ def schedule_of_day(d):
 
 
 def write_schedule():
-    first = date.today() - timedelta(days=2)  # 台灣今天的比賽，美東日期可能是前一天，多抓兩天當緩衝
+    first = SCHEDULE_START
     games, d = {}, first
     while d <= SEASON_END:
         for g in schedule_of_day(d):

@@ -27,6 +27,10 @@ GAME_FILES = ["games_2026-27.txt"]
 PACE_FILE = "pace_2025-26.txt"  # 只有「整季完成」模式（賽季前預測）用這個檔
 BOX_FILE = "boxscores_2026-27.json"  # 球季進行中：由 fetch_espn_games.py 產生，用來算本季累積 PACE（不用上季的）
 SCHEDULE_FILE = "schedule_2026-27.json"  # 球季進行中：由 fetch_espn_games.py 產生，網頁的賽程分頁用
+# 賽程分頁最早能看到的台灣日期：這天起的已完賽比賽會顯示「賽前預測比分 + 結果」，
+# 但只有「最近一個比賽日」的比賽能點進去看完整預測，更早的只能看卡片。
+# 想讓大家往前多看幾天，改這個日期（fetch_espn_games.py 的 SCHEDULE_START 也要跟著提早一天，再重抓）。
+SCHEDULE_SHOW_FROM = "2026-11-03"
 # ESPN 的比賽備註 -> 網頁上顯示的標籤
 SCHEDULE_TAGS = {
     "NBA Cup - Group Play": "NBA 盃小組賽", "NBA Cup - Quarterfinals": "NBA 盃八強", "NBA Cup - Semifinals": "NBA 盃四強",
@@ -196,6 +200,8 @@ def build_schedule(raw_dir):
     games = []
     for g in json.loads(path.read_text(encoding="utf-8")):
         tw = datetime.strptime(g["utc"], "%Y-%m-%dT%H:%MZ") + timedelta(hours=8)
+        if tw.strftime("%Y-%m-%d") < SCHEDULE_SHOW_FROM:
+            continue
         status = g["status"]
         s = "F" if status == "STATUS_FINAL" else "S" if status == "STATUS_SCHEDULED" else \
             "X" if ("POSTPONED" in status or "CANCELED" in status) else "L"
@@ -329,6 +335,45 @@ def build_pregame(raw_dir, games, schedule):
     }
 
 
+def games_before_tw_day(games, schedule, day):
+    """台灣日期 day 開打「之前」的所有比賽（day 當天與之後的都不算）。
+
+    原始比分只有美東日期（台灣日期通常是它的隔天，偶爾同一天），所以用賽程的台灣日期來對：
+    同一對球隊（客隊, 主隊）在賽程裡的已完賽日期，和比分的美東日期差 0 或 1 天，就是同一場。
+    賽程對不到的（賽程範圍以前的比賽）一定比賽程最早的日期早，直接算「之前」。
+    """
+    name_of = {v[0]: k for k, v in TEAMS.items()}
+    tw_days = defaultdict(list)
+    for g in schedule["games"]:
+        if g["s"] == "F" and g["a"] and g["h"]:
+            tw_days[(name_of[g["a"]], name_of[g["h"]])].append(date.fromisoformat(g["d"]))
+    out = []
+    for g in games:
+        et = g[0].date()
+        tw = [d for d in tw_days.get((g[1], g[3]), []) if (d - et).days in (0, 1)]
+        if (tw[0] if tw else et) < day:
+            out.append(g)
+    return out
+
+
+def build_pre_days(raw_dir, games, schedule, latest):
+    """賽程分頁裡「比最近一個比賽日更早」的每個比賽日，各存一份開打前的球隊數據，
+    讓那些日子的卡片也能顯示賽前預測比分。只留預測公式要用的欄位，檔案才不會太大。
+    （最近一個比賽日另外存在 pre，裡面還有交手紀錄，因為那天的比賽可以點進去看完整預測。）
+    """
+    days = sorted({g["d"] for g in schedule["games"]
+                   if g["s"] == "F" and g["a"] and g["h"] and SCHEDULE_SHOW_FROM <= g["d"] < latest})
+    keep = ("gp", "off", "def", "l10off", "l10def", "net", "net10", "pace")
+    out = {}
+    for d in days:
+        pre_games = games_before_tw_day(games, schedule, date.fromisoformat(d))
+        if not pre_games:
+            continue
+        rows = team_rows(pre_games, season_pace(raw_dir, pre_games), with_model=True)
+        out[d] = {k: {f: r[f] for f in keep} for k, r in rows.items()}
+    return out
+
+
 def main(raw_dir, target, complete):
     games, excluded = load_games(raw_dir, GAME_FILES, REGULAR_SEASON_END, EXCLUDED_GAMES)
     assert games, "沒有任何比賽資料"
@@ -376,6 +421,7 @@ def main(raw_dir, target, complete):
         pre = build_pregame(raw_dir, games, schedule)
         if pre:
             payload["pre"] = pre
+            payload["preDays"] = build_pre_days(raw_dir, games, schedule, pre["date"])
 
     payload["teams"] = out
     target.parent.mkdir(parents=True, exist_ok=True)
