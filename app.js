@@ -552,6 +552,15 @@
     var list = $("game-list");
     list.innerHTML = "";
     games.forEach(function (g) { list.appendChild(gameItem(g, date)); });
+    // 當天已完賽、有賽前預測的比賽：預測正確幾場、預測失敗幾場（用大比分那個算法，和卡片上標的一樣）
+    var right = 0, wrong = 0;
+    if (MODEL) games.forEach(function (g) {
+      var pi = preGameInfo(g);
+      if (pi) { if (pi.ok1) right++; else wrong++; }
+    });
+    var sum = $("day-summary");
+    sum.hidden = right + wrong === 0;
+    sum.innerHTML = '當天預測正確 <span class="ok">' + right + '</span> 場、預測失敗 <span class="bad">' + wrong + "</span> 場";
     $("game-empty").hidden = games.length > 0;
     if (!games.length) {
       $("game-empty-text").textContent = fmtDate(date) + "沒有比賽。";
