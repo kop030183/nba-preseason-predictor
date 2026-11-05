@@ -310,11 +310,9 @@
     if (MODEL) {
       var p2 = cmp.p2;
       var same = cmp.same;
-      var win2 = cmp.w2 === "home" ? h : a;
       alt.innerHTML =
         '<div class="alt-title">近況預測</div>' +
-        '<div class="alt-line">' + a.zh + " " + f1(p2.away) + " : " + f1(p2.home) + " " + h.zh +
-        "（" + win2.zh + " 勝 " + f1(Math.abs(p2.home - p2.away)) + " 分）</div>";
+        '<div class="alt-line">' + a.zh + " " + f1(p2.away) + " : " + f1(p2.home) + " " + h.zh + "</div>";
       summary.className = "summary " + (same ? "agree" : "differ");
       summary.textContent = same ? "兩種模式預測方向一致 可參考" : "兩種模式預測方向不一致 看看就好";
     }
