@@ -685,9 +685,8 @@
     var line = "";
     if (g.s === "F") {
       if (pi) {  // 賽前預測（大比分那個算法）vs 實際結果
-        var predWin = pi.c.w1 === "home" ? pi.hn : pi.an;
         line = "賽前預測比分：" + pi.an.zh + " " + f1(pi.c.p1.away) + " : " + f1(pi.c.p1.home) + " " + pi.hn.zh +
-          "<br>賽前預測：" + predWin.zh + " 勝<br>" + confHtml(pi.c.p1);
+          "<br>" + confHtml(pi.c.p1);
       }
     } else if (g.s === "X") {
       line = "";
