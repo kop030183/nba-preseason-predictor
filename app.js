@@ -673,7 +673,8 @@
     if (g.s === "F" && a && h) {
       var homeWon = g.hs > g.as;
       mid = '<div class="gm-score"><span class="gm-pts ' + (homeWon ? "lose" : "win") + '">' + g.as + "</span>" +
-        '<span class="gm-final"><b>' + (homeWon ? "▶" : "◀") + "</b>已完賽</span>" +
+        '<span class="gm-final"><b>' + (homeWon ? "▶" : "◀") + "</b>已完賽" +
+        (pi ? '<span class="gm-res ' + (pi.ok1 ? "ok" : "bad") + '">' + (pi.ok1 ? "預測正確" : "預測失敗") + "</span>" : "") + "</span>" +
         '<span class="gm-pts ' + (homeWon ? "win" : "lose") + '">' + g.hs + "</span></div>";
     } else {
       mid = '<div class="game-time">' + g.t + "</div>" +
@@ -686,8 +687,7 @@
       if (pi) {  // 賽前預測（大比分那個算法）vs 實際結果
         var predWin = pi.c.w1 === "home" ? pi.hn : pi.an;
         line = "賽前預測比分：" + pi.an.zh + " " + f1(pi.c.p1.away) + " : " + f1(pi.c.p1.home) + " " + pi.hn.zh +
-          "<br>賽前預測：" + predWin.zh + " 勝（" + confHtml(pi.c.p1) + "）　" +
-          (pi.ok1 ? '<span class="ok">預測正確</span>' : '<span class="bad">預測失敗</span>');
+          "<br>賽前預測：" + predWin.zh + " 勝<br>" + confHtml(pi.c.p1);
       }
     } else if (g.s === "X") {
       line = "";
