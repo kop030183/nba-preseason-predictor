@@ -129,9 +129,13 @@
     return 1.05 / (lum + 0.05) >= 4.5 ? "#fff" : "#000";
   }
 
-  // 連勝：超過 3 連勝（4 連勝起）才在隊徽上方標出來
+  // 連勝 / 連敗：超過 3 場（4 場起）才在隊徽上方標出來；連勝橘色 🔥、連敗藍色 🥶
   var STREAK_MIN = 4;
-  function streakText(t) { return t.streak >= STREAK_MIN ? "🔥 " + t.streak + " 連勝" : ""; }
+  function streakText(t) {
+    if (t.streak >= STREAK_MIN) return "🔥 " + t.streak + " 連勝";
+    if (t.lstreak >= STREAK_MIN) return '<span class="cold">🥶 ' + t.lstreak + " 連敗</span>";
+    return "";
+  }
 
   // streak：undefined = 不留位置；字串 = 隊徽上方那一行（空字串留空白，讓兩隊的隊徽仍然對齊）
   function teamBlock(t, role, score, isWinner, streak) {
@@ -377,7 +381,7 @@
     result.hidden = false;
     if (MODEL) {
       if (pregame) showRecordedOdds(a, h, aColor, hColor);
-      else renderOdds(aKey, hKey, a, h, aColor, hColor, streakWeakSide(a, h, cmp.p1));
+      else renderOdds(aKey, hKey, a, h, aColor, hColor);
     }
   }
 
@@ -423,16 +427,7 @@
   function sgn(v) { return (v > 0 ? "+" : "") + f1(v); }          // 讓分顯示：+1.5 / -1.5
   function half(v) { return f1(Math.floor(v) + 0.5); }             // 單隊總分調成 .5 結尾（x.0 進位到 x.5）
 
-  // 連勝隊（4 連勝起）被預測「小贏」（贏 3.5 分以內）時，連勝有機會被打斷，賭盤卡片可以多一行提示。
-  // 被預測會輸的連勝隊不提示（他本來就比較可能輸，高賠率方多半就是他自己）。回傳那支連勝隊在哪一邊："a" / "h" / null
-  function streakWeakSide(a, h, p) {
-    var m = Math.round((Number(f1(p.home)) - Number(f1(p.away))) * 10) / 10;  // 預測主隊贏幾分（畫面比分相減）
-    if (a.streak >= STREAK_MIN && -m > 0 && -m <= 3.5) return "a";
-    if (h.streak >= STREAK_MIN && m > 0 && m <= 3.5) return "h";
-    return null;
-  }
-
-  function drawOdds(a, h, aColor, hColor, homeLine, totalLine, note, res, tip) {
+  function drawOdds(a, h, aColor, hColor, homeLine, totalLine, note, res) {
     var UP = " ⬆️", DOWN = " ⬇️", OK = " ✅";
     var overUnder = function (actual, line) { return actual > line ? UP : actual < line ? DOWN : ""; };
     var rows = "";
@@ -451,8 +446,7 @@
     }
     if (!rows) return false;
     $("odds-body").innerHTML = '<div class="odds-title">' + (res ? "賭盤結果" : "賭盤") + '</div><table class="stats"><thead><tr><th style="color:' + aColor + '">' + a.zh +
-      '</th><th></th><th style="color:' + hColor + '">' + h.zh + "</th></tr></thead><tbody>" + rows + "</tbody></table>" +
-      (tip ? '<div class="odds-tip">依照經驗，連勝者預測贏不超過3.5分繼續連勝機率為50 50，可試試看買弱勢高賠一方</div>' : "");
+      '</th><th></th><th style="color:' + hColor + '">' + h.zh + "</th></tr></thead><tbody>" + rows + "</tbody></table>";
     $("odds-note").innerHTML = note + "<br>非投注建議，娛樂參考 !";
     return true;
   }
@@ -479,16 +473,14 @@
     return lines.map(function (t) { return "<div>" + t + "</div>"; }).join("");
   }
 
-  function showOdds(a, h, aColor, hColor, o, weakSide) {  // 即時盤口（ESPN 賽事列表的 odds）
+  function showOdds(a, h, aColor, hColor, o) {  // 即時盤口（ESPN 賽事列表的 odds）
     var ps = o.pointSpread, tot = o.total;
     var hl = ps && ps.home && ps.home.close;
     var ov = tot && tot.over && tot.over.close;
     var homeLine = hl ? lineNum(hl.line) : null;
     var totalLine = ov ? lineNum(ov.line) : (typeof o.overUnder === "number" ? o.overUnder : null);
     var hh = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(11, 16);
-    return drawOdds(a, h, aColor, hColor, homeLine, totalLine, "經 ESPN 取得 DraftKings 的賭盤概況，台灣時間 " + hh + " 更新", null,
-      // 提示只在「連勝隊同時也是盤口的熱門」時才出現，這樣高賠率方就一定是對手
-      !!weakSide && homeLine != null && (weakSide === "h" ? homeLine < 0 : homeLine > 0));
+    return drawOdds(a, h, aColor, hColor, homeLine, totalLine, "經 ESPN 取得 DraftKings 的賭盤概況，台灣時間 " + hh + " 更新");
   }
 
   // 已完賽的比賽：用 update 時存進賽程資料的收盤盤口（sp = 主隊讓分、ou = 總分；原始紀錄在 raw/odds_2026-27.json）
@@ -504,7 +496,7 @@
     card.hidden = false;
   }
 
-  function renderOdds(aKey, hKey, a, h, aColor, hColor, weakSide) {
+  function renderOdds(aKey, hKey, a, h, aColor, hColor) {
     var card = $("odds-card");
     var g = upcomingGameOf(a.abbr, h.abbr);
     var token = ++oddsToken;
@@ -534,7 +526,7 @@
       });
       var o = ev && ev.odds && ev.odds[0];
       if (!o) return fail("賭鬼 這場目前沒抓到賭盤 請晚點再來!!");
-      if (!showOdds(a, h, aColor, hColor, o, weakSide)) fail("賭鬼 這場目前沒抓到賭盤 請晚點再來!!");
+      if (!showOdds(a, h, aColor, hColor, o)) fail("賭鬼 這場目前沒抓到賭盤 請晚點再來!!");
     }, function () { fail("盤口暫時抓不到，稍後重新整理再試。"); });
   }
 

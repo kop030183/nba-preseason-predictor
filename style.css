@@ -7,6 +7,7 @@
   --accent: #e8590c;
   --accent-soft: #fff0e6;
   --accent2: #f59f00;
+  --cold: #1c7ed6;
   --win: #0b7a3b;
   --bad: #c62828;
   --radius: 14px;
@@ -22,6 +23,7 @@
     --accent: #ff8a3d;
     --accent-soft: #2a1d12;
     --accent2: #ffd43b;
+    --cold: #74c0fc;
     --win: #4cd387;
     --bad: #ff6b6b;
   }
@@ -319,6 +321,7 @@ a.game:hover { border-color: var(--accent); }
   letter-spacing: .05em;
 }
 .team .streak { min-height: 1.4em; margin-bottom: 4px; color: var(--accent); font-size: .85rem; font-weight: 700; }
+.team .streak .cold { color: var(--cold); }
 .team .name { margin-top: 4px; font-weight: 600; }
 .team .role { font-size: .75rem; color: var(--muted); }
 .team .score { font-size: 3rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
@@ -365,7 +368,6 @@ td:first-child, th:first-child { text-align: left; }
 .pre-score { margin: 4px 0; font-size: 1.35rem; font-weight: 800; font-variant-numeric: tabular-nums; }
 .pre-conf .conf { font-size: 1.1rem; }
 .pre-picks { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); font-size: .95rem; line-height: 1.8; font-variant-numeric: tabular-nums; }
-.odds-tip { margin-top: 10px; padding-top: 10px; border-top: 1px solid var(--line); text-align: center; color: var(--accent); font-size: .9rem; font-weight: 600; }
 .odds-title { margin: 0 0 8px; text-align: center; font-weight: 700; }
 .odds-msg { margin: 0; text-align: center; color: var(--muted); font-size: .9rem; }
 .odds-note { margin: -6px 0 16px; text-align: center; color: var(--muted); font-size: .78rem; }
