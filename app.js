@@ -280,6 +280,7 @@
     var result = $("result");
     $("neutral-note").hidden = !neutral;
     $("odds-card").hidden = true;  // 盤口等這次預測算完、確定有這場比賽才會再打開
+    $("vote-card").hidden = true;  // 投票卡片也一樣，算完才打開
     $("picker").hidden = pregame;  // 已完賽的比賽是固定頁面，不能換隊
     $("board-card").hidden = pregame;
     $("pre-board").hidden = !pregame;
@@ -379,6 +380,7 @@
     }).join("");
 
     result.hidden = false;
+    showMatchVote(dayIdx >= 0 ? dayList[dayIdx] : null, fromDate);  // 從賽程點進來的比賽才有投票
     if (MODEL) {
       if (pregame) showRecordedOdds(a, h, aColor, hColor);
       else renderOdds(aKey, hKey, a, h, aColor, hColor);
@@ -795,7 +797,7 @@
       .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
       .then(function (d) { if (voteDate === date) { votes = d || {}; voteState = "ok"; } })
       .catch(function () { if (voteDate === date) voteState = "err"; })
-      .then(function () { if (voteDate === date) drawVote(); });
+      .then(function () { if (voteDate === date) redrawVote(); });
   }
 
   function renderVote(date) {
@@ -816,7 +818,50 @@
     replaceHash({ tab: "vote", date: d });
   }
 
-  // 畫出這一天每一場：開賽前顯示兩個投票按鈕，開賽後鎖票，賽後對照「網友猜的」「我們預測的」「實際結果」
+  // 一場比賽的投票內容（投票頁每張卡、單場頁的投票卡片共用）：
+  // btns 兩個投票按鈕（還能投才有）、bar 票數比例條、info 開賽後的對照（網友多數猜誰、我們預測誰，已完賽再標對錯）
+  // crowd / model：已完賽時網友、我們猜對 (true) 或猜錯 (false)；沒得比就是 null
+  function voteParts(g, date) {
+    var a = T[ABBR[g.a]], h = T[ABBR[g.h]];
+    var v = votes[voteKey(g)] || {};
+    var na = v.a || 0, nh = v.h || 0, tot = na + nh;
+    var open = voteOpen(g, date);
+    var pa = Math.round(na / (tot || 1) * 100);
+    var ready = voteState === "ok";
+
+    var btns = open
+      ? '<div class="vote-btns"><button type="button" class="vote-btn" data-k="' + voteKey(g) + '" data-s="a">' + a.zh +
+        ' 贏</button><button type="button" class="vote-btn" data-k="' + voteKey(g) + '" data-s="h">' + h.zh + " 贏</button></div>"
+      : "";
+
+    var bar = '<div class="vote-bar' + (tot ? "" : " empty") + '"><span class="vb-a" style="width:' + pa + '%"></span></div>' +
+      '<div class="vote-nums"><span>' + a.zh + " " + (ready ? na + " 票" + (tot ? "（" + pa + "%）" : "") : "—") + "</span><span>" +
+      h.zh + " " + (ready ? nh + " 票" + (tot ? "（" + (100 - pa) + "%）" : "") : "—") + "</span></div>";
+
+    var info = "", crowdRes = null, modelRes = null;
+    if (!open && ready) {
+      var lines = [];
+      var crowd = na === nh ? null : (na > nh ? "away" : "home");
+      var pi = g.s === "F" && MODEL ? preGameInfo(g) : null;
+      if (tot) {
+        var cm = "";
+        if (g.s === "F" && crowd) {
+          crowdRes = (crowd === "home") === (g.hs > g.as);
+          cm = crowdRes ? " ✅" : " ❌";
+        }
+        lines.push("網友多數猜 " + (crowd ? (crowd === "home" ? h : a).zh + " 勝" : "平手") + cm);
+      }
+      var c = pi ? pi.c : (MODEL && g.s !== "F" ? compareModels(a, h, g.n) : null);
+      if (c) {
+        if (pi) modelRes = pi.ok1;
+        lines.push("我們預測 " + (c.w1 === "home" ? h : a).zh + " 勝（" + confHtml(c.p1) + "）" + (pi ? (pi.ok1 ? " ✅" : " ❌") : ""));
+      }
+      info = lines.length ? '<div class="game-pred">' + lines.join("<br>") + "</div>" : "";
+    }
+    return { btns: btns, bar: bar, info: info, crowd: crowdRes, model: modelRes, open: open };
+  }
+
+  // 投票頁：畫出這一天每一場，開賽前顯示兩個投票按鈕，開賽後鎖票，賽後對照「網友猜的」「我們預測的」「實際結果」
   function drawVote() {
     var date = voteDate;
     var games = (gamesByDate[date] || []).filter(function (g) { return g.a && g.h && T[ABBR[g.a]] && T[ABBR[g.h]]; });
@@ -826,10 +871,9 @@
     var crowdOk = 0, crowdN = 0, modelOk = 0, modelN = 0;
     games.forEach(function (g) {
       var a = T[ABBR[g.a]], h = T[ABBR[g.h]];
-      var v = votes[voteKey(g)] || {};
-      var na = v.a || 0, nh = v.h || 0, tot = na + nh;
-      var open = voteOpen(g, date);
-      var pa = Math.round(na / (tot || 1) * 100);
+      var p = voteParts(g, date);
+      if (p.crowd !== null) { crowdN++; if (p.crowd) crowdOk++; }
+      if (p.model !== null) { modelN++; if (p.model) modelOk++; }
 
       var mid;
       if (g.s === "F") {
@@ -839,44 +883,12 @@
           '<span class="gm-pts ' + (homeWon ? "win" : "lose") + '">' + g.hs + "</span></div>";
       } else {
         mid = '<div class="game-time">' + g.t + "</div>" +
-          (g.s === "L" ? '<div class="gm-sub live">進行中</div>' : open ? "" : '<div class="gm-sub">已開賽</div>');
-      }
-
-      var btns = open
-        ? '<div class="vote-btns"><button type="button" class="vote-btn" data-k="' + voteKey(g) + '" data-s="a">' + a.zh +
-          ' 贏</button><button type="button" class="vote-btn" data-k="' + voteKey(g) + '" data-s="h">' + h.zh + " 贏</button></div>"
-        : "";
-
-      var bar = '<div class="vote-bar' + (tot ? "" : " empty") + '"><span class="vb-a" style="width:' + pa + '%"></span></div>' +
-        '<div class="vote-nums"><span>' + a.zh + " " + (voteState === "ok" ? na + " 票" + (tot ? "（" + pa + "%）" : "") : "—") + "</span><span>" +
-        h.zh + " " + (voteState === "ok" ? nh + " 票" + (tot ? "（" + (100 - pa) + "%）" : "") : "—") + "</span></div>";
-
-      // 開賽後的對照：網友多數猜誰、我們預測誰；已完賽的再標對錯
-      var info = "";
-      if (!open && voteState === "ok") {
-        var lines = [];
-        var crowd = na === nh ? null : (na > nh ? "away" : "home");
-        var pi = g.s === "F" && MODEL ? preGameInfo(g) : null;
-        if (tot) {
-          var cm = "";
-          if (g.s === "F" && crowd) {
-            var ok = (crowd === "home") === (g.hs > g.as);
-            crowdN++; if (ok) crowdOk++;
-            cm = ok ? " ✅" : " ❌";
-          }
-          lines.push("網友多數猜 " + (crowd ? (crowd === "home" ? h : a).zh + " 勝" : "平手") + cm);
-        }
-        var c = pi ? pi.c : (MODEL && g.s !== "F" ? compareModels(a, h, g.n) : null);
-        if (c) {
-          if (pi) { modelN++; if (pi.ok1) modelOk++; }
-          lines.push("我們預測 " + (c.w1 === "home" ? h : a).zh + " 勝（" + confHtml(c.p1) + "）" + (pi ? (pi.ok1 ? " ✅" : " ❌") : ""));
-        }
-        info = lines.length ? '<div class="game-pred">' + lines.join("<br>") + "</div>" : "";
+          (g.s === "L" ? '<div class="gm-sub live">進行中</div>' : p.open ? "" : '<div class="gm-sub">已開賽</div>');
       }
 
       var li = document.createElement("li");
       li.innerHTML = '<div class="game vote-card"><div class="gm-row">' + teamCell(a) + '<div class="gm-mid">' + mid + "</div>" +
-        teamCell(h) + "</div>" + btns + bar + info + "</div>";
+        teamCell(h) + "</div>" + p.btns + p.bar + p.info + "</div>";
       list.appendChild(li);
     });
     if (!games.length) list.innerHTML = '<li class="game-empty"><p>' + fmtDate(date) + "沒有比賽。</p></li>";
@@ -885,10 +897,42 @@
     sum.innerHTML = '網友猜對 <span class="ok">' + crowdOk + "</span> / " + crowdN + " 場　我們猜對 <span class=\"ok\">" + modelOk + "</span> / " + modelN + " 場";
   }
 
+  // 單場頁（賽程點進來的那場）的投票卡片：放在兩隊對戰紀錄下面、本季數據對照上面
+  var matchVote = null;  // { g: 這場比賽, date: 賽程日期 }；不是從賽程點進來的（自選對戰）就是 null
+
+  function showMatchVote(g, date) {
+    matchVote = VOTE_ON && g && date ? { g: g, date: date } : null;
+    if (!matchVote) { $("vote-card").hidden = true; return; }
+    if (voteDate !== date) {  // 這一天的票數還沒讀過：讀一次（同一天的其他場、投票頁共用同一份）
+      voteDate = date;
+      votes = {};
+      voteState = "loading";
+      setVoteMsg("");
+      loadVotes(date);
+    }
+    drawMatchVote();
+  }
+
+  function drawMatchVote() {
+    var card = $("vote-card");
+    if (!matchVote || matchVote.date !== voteDate) { card.hidden = true; return; }
+    var p = voteParts(matchVote.g, matchVote.date);
+    card.innerHTML = "<h2>🗳️ 投票" + (p.open ? "：誰會贏？" : "") + "</h2>" +
+      (voteState === "err" ? '<p class="vote-msg">票數暫時讀不到，請晚點再來!!</p>' : "") +
+      p.btns + p.bar + p.info;
+    card.hidden = false;
+  }
+
+  // 票數有變動：投票頁、單場頁哪個看得到就重畫哪個
+  function redrawVote() {
+    if (!$("view-vote").hidden) drawVote();
+    drawMatchVote();
+  }
+
   function castVote(date, key, side) {
     var v = votes[key] || (votes[key] = {});
     v[side] = (v[side] || 0) + 1;  // 先在畫面上加 1，不用等伺服器
-    drawVote();
+    redrawVote();
     var body = {};
     body[side] = { ".sv": { increment: 1 } };  // 叫伺服器自己加 1，兩個人同時投也不會互相蓋掉
     votePending++;
@@ -896,7 +940,7 @@
       .then(function (r) { if (!r.ok) throw new Error(r.status); })
       .catch(function () {
         v[side]--;
-        if (voteDate === date) { setVoteMsg("這票沒送出去，請晚點再試!!"); drawVote(); }
+        if (voteDate === date) { setVoteMsg("這票沒送出去，請晚點再試!!"); redrawVote(); }
       })
       .then(function () {
         votePending--;
@@ -1133,10 +1177,12 @@
       $("tab-vote").addEventListener("click", function () { location.hash = hashOf({ tab: "vote", date: voteDate }); });
       $("vote-prev").addEventListener("click", function () { goVoteDate(prevMatchDay(voteDate)); });
       $("vote-next").addEventListener("click", function () { goVoteDate(nextMatchDay(voteDate)); });
-      $("vote-list").addEventListener("click", function (e) {
+      var onVoteClick = function (e) {
         var b = e.target.closest ? e.target.closest(".vote-btn") : null;
         if (b) castVote(voteDate, b.getAttribute("data-k"), b.getAttribute("data-s"));
-      });
+      };
+      $("vote-list").addEventListener("click", onVoteClick);
+      $("vote-card").addEventListener("click", onVoteClick);
     }
     $("st-east").addEventListener("click", function () { stConf = "E"; renderStandings(); });
     $("st-west").addEventListener("click", function () { stConf = "W"; renderStandings(); });
