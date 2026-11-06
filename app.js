@@ -378,7 +378,7 @@
     result.hidden = false;
     if (MODEL) {
       if (pregame) showRecordedOdds(a, h, aColor, hColor);
-      else renderOdds(aKey, hKey, a, h, aColor, hColor, streakTip(a, h, cmp.p1));
+      else renderOdds(aKey, hKey, a, h, aColor, hColor, streakWeakSide(a, h, cmp.p1));
     }
   }
 
@@ -424,10 +424,13 @@
   function sgn(v) { return (v > 0 ? "+" : "") + f1(v); }          // 讓分顯示：+1.5 / -1.5
   function half(v) { return f1(Math.floor(v) + 0.5); }             // 單隊總分調成 .5 結尾（x.0 進位到 x.5）
 
-  // 連勝隊（4 連勝起）被預測贏不到 3.5 分以上（含預測會輸）時，賭盤卡片多一行提示
-  function streakTip(a, h, p) {
+  // 連勝隊（4 連勝起）被預測「小贏」（贏 3.5 分以內）時，連勝有機會被打斷，賭盤卡片可以多一行提示。
+  // 被預測會輸的連勝隊不提示（他本來就比較可能輸，高賠率方多半就是他自己）。回傳那支連勝隊在哪一邊："a" / "h" / null
+  function streakWeakSide(a, h, p) {
     var m = Math.round((Number(f1(p.home)) - Number(f1(p.away))) * 10) / 10;  // 預測主隊贏幾分（畫面比分相減）
-    return (a.streak >= STREAK_MIN && -m <= 3.5) || (h.streak >= STREAK_MIN && m <= 3.5);
+    if (a.streak >= STREAK_MIN && -m > 0 && -m <= 3.5) return "a";
+    if (h.streak >= STREAK_MIN && m > 0 && m <= 3.5) return "h";
+    return null;
   }
 
   function drawOdds(a, h, aColor, hColor, homeLine, totalLine, note, res, tip) {
@@ -450,7 +453,7 @@
     if (!rows) return false;
     $("odds-body").innerHTML = '<div class="odds-title">' + (res ? "賭盤結果" : "賭盤") + '</div><table class="stats"><thead><tr><th style="color:' + aColor + '">' + a.zh +
       '</th><th></th><th style="color:' + hColor + '">' + h.zh + "</th></tr></thead><tbody>" + rows + "</tbody></table>" +
-      (tip ? '<div class="odds-tip">可以試試看高賠率方</div>' : "");
+      (tip ? '<div class="odds-tip">依照經驗，連勝者預測贏不超過3.5分繼續連勝機率為50 50，可試試看買弱勢高賠一方</div>' : "");
     $("odds-note").innerHTML = note + "<br>非投注建議，娛樂參考 !";
     return true;
   }
@@ -477,14 +480,16 @@
     return lines.map(function (t) { return "<div>" + t + "</div>"; }).join("");
   }
 
-  function showOdds(a, h, aColor, hColor, o, tip) {  // 即時盤口（ESPN 賽事列表的 odds）
+  function showOdds(a, h, aColor, hColor, o, weakSide) {  // 即時盤口（ESPN 賽事列表的 odds）
     var ps = o.pointSpread, tot = o.total;
     var hl = ps && ps.home && ps.home.close;
     var ov = tot && tot.over && tot.over.close;
     var homeLine = hl ? lineNum(hl.line) : null;
     var totalLine = ov ? lineNum(ov.line) : (typeof o.overUnder === "number" ? o.overUnder : null);
     var hh = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(11, 16);
-    return drawOdds(a, h, aColor, hColor, homeLine, totalLine, "經 ESPN 取得 DraftKings 的賭盤概況，台灣時間 " + hh + " 更新", null, tip);
+    return drawOdds(a, h, aColor, hColor, homeLine, totalLine, "經 ESPN 取得 DraftKings 的賭盤概況，台灣時間 " + hh + " 更新", null,
+      // 提示只在「連勝隊同時也是盤口的熱門」時才出現，這樣高賠率方就一定是對手
+      !!weakSide && homeLine != null && (weakSide === "h" ? homeLine < 0 : homeLine > 0));
   }
 
   // 已完賽的比賽：用 update 時存進賽程資料的收盤盤口（sp = 主隊讓分、ou = 總分；原始紀錄在 raw/odds_2026-27.json）
@@ -500,7 +505,7 @@
     card.hidden = false;
   }
 
-  function renderOdds(aKey, hKey, a, h, aColor, hColor, tip) {
+  function renderOdds(aKey, hKey, a, h, aColor, hColor, weakSide) {
     var card = $("odds-card");
     var g = upcomingGameOf(a.abbr, h.abbr);
     var token = ++oddsToken;
@@ -530,7 +535,7 @@
       });
       var o = ev && ev.odds && ev.odds[0];
       if (!o) return fail("賭鬼 這場目前沒抓到賭盤 請晚點再來!!");
-      if (!showOdds(a, h, aColor, hColor, o, tip)) fail("賭鬼 這場目前沒抓到賭盤 請晚點再來!!");
+      if (!showOdds(a, h, aColor, hColor, o, weakSide)) fail("賭鬼 這場目前沒抓到賭盤 請晚點再來!!");
     }, function () { fail("盤口暫時抓不到，稍後重新整理再試。"); });
   }
 
