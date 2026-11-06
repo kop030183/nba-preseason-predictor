@@ -229,7 +229,9 @@
       var ap = awayFirst ? m[0] : m[1];
       var hp = awayFirst ? m[1] : m[0];
       if (ap > hp) awayWins++;
-      return '<div class="h2h-game">' + a.zh + " " + ap + " : " + hp + " " + h.zh + "</div>";
+      // 贏的那一側（隊名 + 分數）調亮，輸的那側維持暗灰色
+      return '<div class="h2h-game"><span' + (ap > hp ? ' class="h2h-win"' : "") + ">" + a.zh + " " + ap + "</span> : <span" +
+        (hp > ap ? ' class="h2h-win"' : "") + ">" + hp + " " + h.zh + "</span></div>";
     });
     return '<div class="h2h-block"><div class="h2h-title">' + title + meetings.length + " 場：" + a.zh + " " +
       awayWins + " 勝 " + (meetings.length - awayWins) + " 敗</div>" + lines.join("") + "</div>";
@@ -282,6 +284,7 @@
     $("odds-card").hidden = true;  // 盤口等這次預測算完、確定有這場比賽才會再打開
     $("vote-card").hidden = true;  // 投票卡片也一樣，算完才打開
     $("inj-card").hidden = true;   // 傷病名單也一樣
+    $("players-card").hidden = true;  // 得分前三球員也一樣
     $("picker").hidden = pregame;  // 已完賽的比賽是固定頁面，不能換隊
     $("board-card").hidden = pregame;
     $("pre-board").hidden = !pregame;
@@ -382,6 +385,7 @@
 
     result.hidden = false;
     showMatchVote(dayIdx >= 0 ? dayList[dayIdx] : null, fromDate);  // 從賽程點進來的比賽才有投票
+    if (!pregame) renderPlayers(aKey, hKey, a, h, aColor, hColor);   // 得分前三球員：已完賽的固定頁面不顯示
     if (!pregame) renderInjuries(aKey, hKey, a, h, aColor, hColor);  // 傷病名單：已完賽的固定頁面不顯示
     if (MODEL) {
       if (pregame) showRecordedOdds(a, h, aColor, hColor);
@@ -532,6 +536,37 @@
       if (!o) return fail("賭鬼 這場目前沒抓到賭盤 請晚點再來!!");
       if (!showOdds(a, h, aColor, hColor, o)) fail("賭鬼 這場目前沒抓到賭盤 請晚點再來!!");
     }, function () { fail("盤口暫時抓不到，稍後重新整理再試。"); });
+  }
+
+  // ---------- 每隊得分前三高的球員（build_data.py 用每場比賽的球員數據算出來，只收出賽過半的球員） ----------
+  // 放在投票下面、本季數據對照上面；已完賽的固定頁面不顯示（那是現在的數字，不是當時的）
+  var PLAYERS = window.NBA_PLAYERS && window.NBA_PLAYERS.teams ? window.NBA_PLAYERS.teams : null;
+
+  function plStat(label, val, cls) {
+    return '<div class="pl-st"><b' + (cls ? ' class="' + cls + '"' : "") + ">" + val + "</b><span>" + label + "</span></div>";
+  }
+
+  function playerCell(p, color) {
+    if (!p) return '<div class="pl-cell pl-empty">—</div>';
+    var pm = p.pm > 0 ? "+" + f1(p.pm) : f1(p.pm);
+    return '<div class="pl-cell"><div class="pl-name" style="color:' + color + '">' + p.n + "</div>" +
+      '<div class="pl-stats">' + plStat("得分", f1(p.pts)) + plStat("籃板", f1(p.reb)) + plStat("助攻", f1(p.ast)) +
+      plStat("+/-", pm, p.pm > 0 ? "pos" : p.pm < 0 ? "neg" : "") + "</div></div>";
+  }
+
+  function renderPlayers(aKey, hKey, a, h, aColor, hColor) {
+    var card = $("players-card");
+    var pa = PLAYERS && PLAYERS[aKey] || [], ph = PLAYERS && PLAYERS[hKey] || [];
+    if (!pa.length && !ph.length) { card.hidden = true; return; }
+    var rows = "";
+    for (var i = 0; i < 3; i++) {
+      if (!pa[i] && !ph[i]) break;
+      rows += '<div class="pl-row">' + playerCell(pa[i], aColor) + playerCell(ph[i], hColor) + "</div>";
+    }
+    card.innerHTML = '<div class="odds-title">得分前三球員</div>' +
+      '<div class="pl-head"><span style="color:' + aColor + '">' + a.zh + '</span><span style="color:' + hColor + '">' + h.zh + "</span></div>" +
+      rows;
+    card.hidden = false;
   }
 
   // ---------- 傷病名單（ESPN；打開頁面時即時抓，不寫進資料檔） ----------

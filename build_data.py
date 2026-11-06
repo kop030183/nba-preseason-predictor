@@ -27,6 +27,8 @@ GAME_FILES = ["games_2026-27.txt"]
 PACE_FILE = "pace_2025-26.txt"  # 只有「整季完成」模式（賽季前預測）用這個檔
 BOX_FILE = "boxscores_2026-27.json"  # 球季進行中：由 fetch_espn_games.py 產生，用來算本季累積 PACE（不用上季的）
 ODDS_FILE = "odds_2026-27.json"  # 已完賽比賽的賭盤紀錄，由 fetch_espn_games.py 產生
+PLAYERS_FILE = "players_2026-27.json"  # 已完賽比賽的逐場球員數據，由 fetch_espn_games.py 產生（算每隊得分前三高的球員）
+TOP_SCORERS = 3  # 每隊列出場均得分最高的幾位
 SCHEDULE_FILE = "schedule_2026-27.json"  # 球季進行中：由 fetch_espn_games.py 產生，網頁的賽程分頁用
 # 賽程分頁最早能看到的台灣日期：這天起的已完賽比賽會顯示「賽前預測比分 + 結果」，
 # 但只有「最近一個比賽日」的比賽能點進去看完整預測，更早的只能看卡片。
@@ -187,6 +189,44 @@ def season_pace(raw_dir, games):
             mins[t] += minutes5
     assert not missing, f"有 {len(missing)} 場比賽沒有 boxscore，請先執行 python fetch_espn_games.py：{missing[:3]}..."
     return {t: round(48 * poss[t] / mins[t], 1) if mins[t] else None for t in TEAMS}
+
+
+def build_players(raw_dir, games):
+    """每隊場均得分前三高的球員（只算例行賽，盃賽決賽等被排除的比賽不算）。回傳 None = 沒有球員數據檔。
+
+    只收「出賽場數 >= 球隊已打場數的一半」的球員，避免只打一兩場的人因為一場爆發衝上榜。
+    場均得分、籃板、助攻、正負值都只除以「有上場」的場次（沒上場的不算進去）。
+    """
+    path = raw_dir / PLAYERS_FILE
+    if not path.exists():
+        return None
+    cache = json.loads(path.read_text(encoding="utf-8"))
+    by_game = {(datetime.fromisoformat(v["date"]), v["away"], v["home"]): v for v in cache.values()}
+    team_gp = defaultdict(int)
+    tot = defaultdict(dict)
+    missing = []
+    for d, vis, _, home, _ in games:
+        rec = by_game.get((d, vis, home))
+        if rec is None:
+            missing.append(f"{d:%Y-%m-%d} {vis} @ {home}")
+            continue
+        for team in (vis, home):
+            team_gp[team] += 1
+            for pid, name, _mins, pts, reb, ast, pm in rec["p"][team]:
+                p = tot[team].setdefault(pid, {"n": name, "gp": 0, "pts": 0, "reb": 0, "ast": 0, "pm": 0})
+                p["gp"] += 1
+                p["pts"] += pts
+                p["reb"] += reb
+                p["ast"] += ast
+                p["pm"] += pm
+    assert not missing, f"有 {len(missing)} 場比賽沒有球員數據，請先執行 python fetch_espn_games.py：{missing[:3]}..."
+    out = {}
+    for team in TEAMS:
+        need = max(1, -(-team_gp[team] // 2))  # 球隊已打場數的一半（進位）
+        ps = sorted((p for p in tot[team].values() if p["gp"] >= need), key=lambda p: (-p["pts"] / p["gp"], p["n"]))
+        out[team] = [{"n": p["n"], "gp": p["gp"], "pts": round(p["pts"] / p["gp"], 1), "reb": round(p["reb"] / p["gp"], 1),
+                      "ast": round(p["ast"] / p["gp"], 1), "pm": round(p["pm"] / p["gp"], 1)} for p in ps[:TOP_SCORERS]]
+    return {"asOf": games[-1][0].strftime("%Y-%m-%d"), "teams": out}
 
 
 def build_schedule(raw_dir):
@@ -461,6 +501,19 @@ def main(raw_dir, target, complete):
     )
     if schedule:
         print(f"賽程：{len(schedule['games'])} 場（台灣時間）-> {schedule_target}")
+
+    # 每隊得分前三高的球員（只有球季進行中才有；沒有球員數據檔就寫 null，網頁就不會顯示這張卡片）
+    players = None if complete else build_players(raw_dir, games)
+    players_target = target.parent / "players.js"
+    players_target.write_text(
+        "// 由 build_data.py 自動產生，請勿手改\nwindow.NBA_PLAYERS = "
+        + json.dumps(players, ensure_ascii=False, separators=(",", ":")).replace('],"', '],\n"') + ";\n",
+        encoding="utf-8",
+    )
+    if players:
+        print(f"得分前三球員：{len(players['teams'])} 隊 -> {players_target}")
+    elif not complete:
+        print(f"注意：找不到 {raw_dir / PLAYERS_FILE}，網頁不會有得分前三球員卡片（請執行 python fetch_espn_games.py）")
 
 
 if __name__ == "__main__":

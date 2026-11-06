@@ -4,6 +4,7 @@
   raw/games_2026-27.txt      逐場比分（每次整個檔案重寫，不會有重複或漏掉的場次）
   raw/boxscores_2026-27.json 逐場的出手/罰球/籃板/失誤（算本季 PACE 用）。有快取：已經抓過的場次不會再抓，
                              所以第一次跑要幾分鐘，之後每次只抓新打完的比賽。
+  raw/players_2026-27.json   逐場的球員數據（上場時間、得分、籃板、助攻、正負值），算每隊得分前三高的球員用。一樣是增量。
 
 只收 STATUS_FINAL（已完賽）的比賽，打到一半或還沒打的不收。ESPN 日期是美東日期，和
 Basketball-Reference 一致。任何一天或任何一場抓取失敗就直接報錯，不會默默少資料。
@@ -33,6 +34,7 @@ OUT_FILE = RAW / "games_2026-27.txt"
 BOX_FILE = RAW / "boxscores_2026-27.json"
 SCHEDULE_FILE = RAW / "schedule_2026-27.json"
 ODDS_FILE = RAW / "odds_2026-27.json"  # 已完賽比賽的賭盤紀錄（開盤與收盤）
+PLAYERS_FILE = RAW / "players_2026-27.json"  # 已完賽比賽的逐場球員數據
 SEASON_END = date(2027, 4, 11)  # 例行賽最後一天（美東日期）
 # 賽程從哪個美東日期開始抓：網頁賽程分頁最早能看的台灣日期（build_data.py 的 SCHEDULE_SHOW_FROM）
 # 要往前推一天，因為台灣日期通常是美東日期的隔天（2026-11-03 台灣 = 美東 11/2 的比賽）
@@ -130,6 +132,54 @@ def box_of_game(event_id, game):
     return stats
 
 
+def _int(s):
+    """'38' -> 38、'+9' -> 9、'-5' -> -5；空字串或 '--' 回傳 None。"""
+    try:
+        return int(str(s).strip())
+    except ValueError:
+        return None
+
+
+def players_of_game(event_id, game):
+    """單場 summary -> 兩隊每位上場球員的 [ESPN球員編號, 名字, 上場分鐘, 得分, 籃板, 助攻, 正負值]（沒上場的不收）。"""
+    out = {}
+    for t in fetch_json(SUMMARY_URL.format(event_id), f"事件 {event_id} 的球員數據")["boxscore"]["players"]:
+        name = NAME_FIX.get(t["team"]["displayName"], t["team"]["displayName"])
+        st = t["statistics"][0]
+        idx = {k: st["labels"].index(k) for k in ("MIN", "PTS", "REB", "AST", "+/-")}
+        rows = []
+        for a in st["athletes"]:
+            s = a.get("stats") or []
+            if a.get("didNotPlay") or not s:
+                continue
+            row = [_int(s[idx[k]]) for k in ("MIN", "PTS", "REB", "AST", "+/-")]
+            if not row[0]:  # 上場時間是 0 或 "--" = 沒有真的上場（ESPN 有時不會標 DNP）
+                continue
+            assert None not in row, f"事件 {event_id} {a['athlete']['displayName']} 的數據看不懂：{s}"
+            rows.append([a["athlete"]["id"], a["athlete"]["displayName"]] + row)
+        out[name] = rows
+    assert set(out) == {game["away"], game["home"]}, f"事件 {event_id} 球員數據隊名對不上：{set(out)}"
+    return out
+
+
+def write_players():
+    """已完賽比賽的逐場球員數據 -> raw/players_2026-27.json（以 ESPN 事件編號為鍵，增量：抓過的不重抓）。"""
+    boxes = json.loads(BOX_FILE.read_text(encoding="utf-8"))
+    cache = json.loads(PLAYERS_FILE.read_text(encoding="utf-8")) if PLAYERS_FILE.exists() else {}
+    new = 0
+    for eid, b in boxes.items():
+        if eid in cache:
+            continue
+        cache[eid] = {"date": b["date"], "away": b["away"], "home": b["home"],
+                      "p": players_of_game(eid, {"away": b["away"], "home": b["home"]})}
+        new += 1
+        time.sleep(0.3)
+    ordered = sorted(cache.items(), key=lambda kv: (kv[1]["date"], kv[0]))
+    body = ",\n".join(f'"{k}": {json.dumps(v, ensure_ascii=False, separators=(",", ":"))}' for k, v in ordered)
+    PLAYERS_FILE.write_text("{\n" + body + "\n}\n", encoding="utf-8")
+    print(f"球員數據：新抓 {new} 場，共 {len(cache)} 場 -> {PLAYERS_FILE}")
+
+
 def _num(s):
     """盤口文字轉數字：'+4.5' -> 4.5、'o229.5' -> 229.5、'-110' -> -110.0、'EVEN' / 'PK' -> 0（讓分平手）。"""
     if s is None:
@@ -219,6 +269,7 @@ def main(end, with_schedule=True):
     if with_schedule:
         write_schedule()
     write_odds()
+    write_players()
 
 
 if __name__ == "__main__":
