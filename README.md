@@ -2,7 +2,7 @@
 
 選兩支 NBA 球隊，或選一天的賽程，看預測比分和勝負。純網頁（HTML / CSS / JavaScript），不需要伺服器。
 
-網站：https://kop030183.github.io/nba-preseason-predictor/
+網站：https://rhwj7y2.github.io/nba-predictor/
 
 ## 畫面
 
