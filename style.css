@@ -191,6 +191,20 @@ a.home-card:hover, a.home-card:focus-visible { border-color: var(--accent); tran
 .vote-nums span:last-child { color: var(--cold); text-align: right; }
 .home-vote { text-align: center; }
 
+/* 傷病名單：先寫「沒參考傷病」，再一隊一段，缺陣紅色、每日觀察橘色 */
+.inj-warn { margin: 2px 0 12px; text-align: center; color: var(--muted); font-size: .85rem; }
+.inj-team { margin: 14px 0 6px; font-weight: 800; }
+.inj-list { list-style: none; margin: 0; padding: 0; }
+.inj-list li { padding: 8px 0; border-top: 1px solid var(--line); }
+.inj-who { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.inj-pos { color: var(--muted); font-size: .75rem; }
+.inj-st { padding: 1px 8px; border-radius: 999px; font-size: .72rem; font-weight: 700; color: var(--muted); border: 1px solid var(--line); }
+.inj-st.out { color: var(--bad); border-color: var(--bad); }
+.inj-st.dtd { color: var(--accent); border-color: var(--accent); }
+.inj-what { margin-top: 2px; color: var(--muted); font-size: .82rem; }
+.inj-none { margin: 0; color: var(--muted); font-size: .85rem; }
+.inj-note { margin: 14px 0 0; text-align: center; color: var(--muted); font-size: .75rem; }
+
 /* 排名 */
 .standings { margin-bottom: 0; }
 .st-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }

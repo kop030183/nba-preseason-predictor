@@ -281,6 +281,7 @@
     $("neutral-note").hidden = !neutral;
     $("odds-card").hidden = true;  // 盤口等這次預測算完、確定有這場比賽才會再打開
     $("vote-card").hidden = true;  // 投票卡片也一樣，算完才打開
+    $("inj-card").hidden = true;   // 傷病名單也一樣
     $("picker").hidden = pregame;  // 已完賽的比賽是固定頁面，不能換隊
     $("board-card").hidden = pregame;
     $("pre-board").hidden = !pregame;
@@ -381,6 +382,7 @@
 
     result.hidden = false;
     showMatchVote(dayIdx >= 0 ? dayList[dayIdx] : null, fromDate);  // 從賽程點進來的比賽才有投票
+    if (!pregame) renderInjuries(aKey, hKey, a, h, aColor, hColor);  // 傷病名單：已完賽的固定頁面不顯示
     if (MODEL) {
       if (pregame) showRecordedOdds(a, h, aColor, hColor);
       else renderOdds(aKey, hKey, a, h, aColor, hColor);
@@ -530,6 +532,67 @@
       if (!o) return fail("賭鬼 這場目前沒抓到賭盤 請晚點再來!!");
       if (!showOdds(a, h, aColor, hColor, o)) fail("賭鬼 這場目前沒抓到賭盤 請晚點再來!!");
     }, function () { fail("盤口暫時抓不到，稍後重新整理再試。"); });
+  }
+
+  // ---------- 傷病名單（ESPN；打開頁面時即時抓，不寫進資料檔） ----------
+  // 預測數據沒有參考傷病，這張卡片只是放在賭盤上面給大家對照；已完賽的固定頁面不顯示（那是現在的名單，不是當時的）
+  var ESPN_INJ = "https://site.api.espn.com/apis/site/v2/sports/basketball/nba/injuries";
+  var injCache = null;  // { t: 抓取時間, p: Promise({ by: 球隊名 -> 傷病名單 }) }；5 分鐘內重用，不重複打 ESPN
+  var injToken = 0;     // 切換球隊很快時，只畫最後一次的結果
+  var INJ_PART = { Knee: "膝蓋", Toe: "腳趾", Hip: "髖部", Ankle: "腳踝", Foot: "腳掌", Eye: "眼睛", Illness: "生病", Undisclosed: "傷勢未公開",
+    Leg: "腿", Shoulder: "肩膀", Thigh: "大腿", Quadriceps: "大腿前側", Hamstring: "大腿後側", Hand: "手", Heel: "腳跟", Back: "背部",
+    Calf: "小腿", Achilles: "阿基里斯腱", Groin: "鼠蹊" };
+  var INJ_KIND = { Inflammation: "發炎", Fracture: "骨折", Abrasion: "擦傷", Soreness: "痠痛", Bruise: "瘀傷", Sprain: "扭傷", Strain: "拉傷",
+    Surgery: "手術", Spasms: "痙攣", Dislocated: "脫臼", "Pinched Nerve": "神經夾擠" };
+
+  function fetchInjuries() {
+    if (injCache && Date.now() - injCache.t < 300000) return injCache.p;
+    var p = fetch(ESPN_INJ).then(function (r) {
+      if (!r.ok) throw new Error("HTTP " + r.status);
+      return r.json();
+    }).then(function (j) {
+      var by = {};
+      (j.injuries || []).forEach(function (t) { by[ESPN_NAME_FIX[t.displayName] || t.displayName] = t.injuries || []; });
+      return { by: by };
+    });
+    injCache = { t: Date.now(), p: p };
+    p["catch"](function () { injCache = null; });
+    return p;
+  }
+
+  function injRow(x) {
+    var d = x.details || {};
+    var place = (d.side === "Left" ? "左" : d.side === "Right" ? "右" : "") + (INJ_PART[d.type] || d.type || "");
+    var kind = d.detail && d.detail !== "Not Specified" ? (INJ_KIND[d.detail] || d.detail) : "";
+    var ret = /^\d{4}-\d{2}-\d{2}$/.test(d.returnDate || "") ? "預計 " + Number(d.returnDate.slice(5, 7)) + "/" + Number(d.returnDate.slice(8)) + " 回歸" : "";
+    var st = x.status === "Out" ? '<span class="inj-st out">缺陣</span>' : x.status === "Day-To-Day" ? '<span class="inj-st dtd">每日觀察</span>' :
+      '<span class="inj-st">' + (x.status || "") + "</span>";
+    var pos = x.athlete && x.athlete.position && x.athlete.position.abbreviation;
+    return '<li><div class="inj-who"><b>' + ((x.athlete && x.athlete.displayName) || "?") + "</b>" + (pos ? " <span class=\"inj-pos\">" + pos + "</span>" : "") +
+      " " + st + '</div><div class="inj-what">' + [place + kind, ret].filter(Boolean).join("・") + "</div></li>";
+  }
+
+  function renderInjuries(aKey, hKey, a, h, aColor, hColor) {
+    var card = $("inj-card");
+    var token = ++injToken;
+    var head = '<div class="odds-title">🚑 傷病名單</div><p class="inj-warn">預測數據沒有參考傷病</p>';
+    card.innerHTML = head + '<p class="odds-msg">載入中…</p>';
+    card.hidden = false;
+    fetchInjuries().then(function (res) {
+      if (token !== injToken) return;
+      var order = { "Out": 0, "Day-To-Day": 1 };
+      var team = function (key, t, color) {
+        var list = (res.by[key] || []).slice().sort(function (x, y) { return (order[x.status] != null ? order[x.status] : 2) - (order[y.status] != null ? order[y.status] : 2); });
+        return '<div class="inj-team" style="color:' + color + '">' + t.zh + "</div>" +
+          (list.length ? '<ul class="inj-list">' + list.map(injRow).join("") + "</ul>" : '<p class="inj-none">目前沒有傷病名單</p>');
+      };
+      var hh = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(11, 16);
+      card.innerHTML = head + team(aKey, a, aColor) + team(hKey, h, hColor) +
+        '<p class="inj-note">經 ESPN 取得，台灣時間 ' + hh + " 更新</p>";
+    }, function () {
+      if (token !== injToken) return;
+      card.innerHTML = head + '<p class="odds-msg">傷病名單暫時抓不到，稍後重新整理再試。</p>';
+    });
   }
 
   // ---------- 初始化 ----------
