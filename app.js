@@ -834,8 +834,14 @@
         ' 贏</button><button type="button" class="vote-btn" data-k="' + voteKey(g) + '" data-s="h">' + h.zh + " 贏</button></div>"
       : "";
 
-    var bar = '<div class="vote-bar' + (tot ? "" : " empty") + '"><span class="vb-a" style="width:' + pa + '%"></span></div>' +
-      '<div class="vote-nums"><span>' + a.zh + " " + (ready ? na + " 票" + (tot ? "（" + pa + "%）" : "") : "—") + "</span><span>" +
+    // 比例條和票數都用兩隊的隊色（跟數據對照同一套，深色底上太暗的顏色會自動調亮）；兩隊顏色太像時，主隊改用灰色，才分得出來
+    var bg = cardBackground();
+    var ca = readableOn(a.color, bg), ch = readableOn(h.color, bg);
+    var rgbA = hexToRgb(a.color), rgbH = hexToRgb(h.color);
+    if (Math.abs(rgbA[0] - rgbH[0]) + Math.abs(rgbA[1] - rgbH[1]) + Math.abs(rgbA[2] - rgbH[2]) < 90) ch = "var(--muted)";
+    var bar = '<div class="vote-bar' + (tot ? "" : " empty") + '"' + (tot ? ' style="background:' + ch + '"' : "") +
+      '><span class="vb-a" style="width:' + pa + '%;background:' + ca + '"></span></div>' +
+      '<div class="vote-nums"><span style="color:' + ca + '">' + a.zh + " " + (ready ? na + " 票" + (tot ? "（" + pa + "%）" : "") : "—") + '</span><span style="color:' + ch + '">' +
       h.zh + " " + (ready ? nh + " 票" + (tot ? "（" + (100 - pa) + "%）" : "") : "—") + "</span></div>";
 
     var info = "", crowdRes = null, modelRes = null;
@@ -1156,8 +1162,9 @@
   // 使用者切換淺色/深色模式時，隊色要跟著重新調整
   if (window.matchMedia) {
     var darkMq = window.matchMedia("(prefers-color-scheme: dark)");
-    if (darkMq.addEventListener) darkMq.addEventListener("change", render);
-    else if (darkMq.addListener) darkMq.addListener(render);
+    var onTheme = function () { render(); if (VOTE_ON && voteDate) redrawVote(); };  // 投票條的隊色也要跟著重算
+    if (darkMq.addEventListener) darkMq.addEventListener("change", onTheme);
+    else if (darkMq.addListener) darkMq.addListener(onTheme);
   }
 
   // 分頁與賽程控制（沒有賽程、或賽程都已過去就不顯示分頁）
