@@ -1,0 +1,18 @@
+{
+  "rules": {
+    ".read": false,
+    ".write": false,
+    "votes": {
+      ".read": true,
+      "$date": {
+        ".validate": "$date.matches(/^[0-9]{4}-[0-9]{2}-[0-9]{2}$/)",
+        "$game": {
+          ".validate": "$game.matches(/^[A-Z]{2,4}_[A-Z]{2,4}$/)",
+          "a": { ".write": true, ".validate": "newData.isNumber() && newData.val() == (data.exists() ? data.val() : 0) + 1" },
+          "h": { ".write": true, ".validate": "newData.isNumber() && newData.val() == (data.exists() ? data.val() : 0) + 1" },
+          "$other": { ".validate": false }
+        }
+      }
+    }
+  }
+}

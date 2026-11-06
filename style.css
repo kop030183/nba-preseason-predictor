@@ -169,6 +169,28 @@ a.home-card:hover, a.home-card:focus-visible { border-color: var(--accent); tran
 .home-games .game-list { margin-top: 10px; }
 .gm-pts.pred { font-size: 1.3rem; }
 
+/* 投票專區：兩個投票按鈕 + 一條票數比例條（客隊在左、主隊在右） */
+.vote-date { flex: 1; text-align: center; font-size: 1.1rem; font-weight: 800; }
+#view-vote .datebar { margin-bottom: 8px; }
+.vote-intro { margin: 0 0 12px; text-align: center; color: var(--muted); font-size: .85rem; }
+.vote-msg { margin: 0 0 12px; text-align: center; color: var(--bad); font-weight: 600; }
+.vote-btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 12px; }
+.vote-btn {
+  font: inherit; font-weight: 700; padding: 10px 6px;
+  color: var(--text); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 10px; cursor: pointer;
+}
+.vote-btn:hover { border-color: var(--accent); color: var(--accent); }
+.vote-btn:active { transform: scale(.97); }
+.vote-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.vote-bar { display: flex; height: 10px; margin-top: 12px; overflow: hidden; background: var(--cold); border-radius: 999px; }
+.vote-bar.empty { background: var(--line); }
+.vote-bar .vb-a { display: block; background: var(--accent); transition: width .25s; }
+.vote-nums { display: flex; justify-content: space-between; gap: 8px; margin-top: 6px; font-size: .8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.vote-nums span:first-child { color: var(--accent); }
+.vote-nums span:last-child { color: var(--cold); text-align: right; }
+.home-vote { text-align: center; }
+
 /* 排名 */
 .standings { margin-bottom: 0; }
 .st-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }

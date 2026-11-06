@@ -767,9 +767,146 @@
     replaceHash({ tab: "schedule", date: d });
   }
 
-  // 四個畫面：home 首頁、schedule 賽程、matchup 自選對戰（含賽程點進去的單場頁）、stats 準確率
+  // ---------- 投票專區：每場猜勝負，不擋重複投票 ----------
+  // 票數存在 Firebase Realtime Database，網頁直接用網址讀寫（REST），不用裝任何套件。
+  // VOTE_DB 填資料庫網址（例如 https://xxxx-default-rtdb.firebaseio.com）；留空 = 不開放投票，分頁和首頁入口都不顯示
+  var VOTE_DB = "https://nba-predictor-c0fb5-default-rtdb.asia-southeast1.firebasedatabase.app";
+  var VOTE_ON = !!VOTE_DB && hasUpcoming();
+  var voteDate = null;
+  var votes = {};        // 這一天的票數：{ "BOS_NYK": { a: 客隊票數, h: 主隊票數 } }
+  var voteState = "loading";  // loading 讀取中、ok 讀到了、err 讀不到
+  var votePending = 0;   // 已送出、還沒收到回覆的票數
+
+  function voteUrl(path) { return VOTE_DB.replace(/\/+$/, "") + "/votes/" + path + ".json"; }
+  function voteKey(g) { return g.a + "_" + g.h; }
+
+  // 還能不能投：還沒開賽（開賽時間比現在晚）才能投；資料沒更新、狀態還是「尚未開打」的過期比賽也算已開賽
+  function voteOpen(g, date) {
+    return g.s === "S" && Date.now() < new Date(date + "T" + g.t + ":00+08:00").getTime();
+  }
+
+  function setVoteMsg(text) {
+    $("vote-msg").hidden = !text;
+    $("vote-msg").textContent = text || "";
+  }
+
+  function loadVotes(date) {
+    return fetch(voteUrl(date), { cache: "no-store" })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); return r.json(); })
+      .then(function (d) { if (voteDate === date) { votes = d || {}; voteState = "ok"; } })
+      .catch(function () { if (voteDate === date) voteState = "err"; })
+      .then(function () { if (voteDate === date) drawVote(); });
+  }
+
+  function renderVote(date) {
+    voteDate = date;
+    votes = {};
+    voteState = "loading";
+    setVoteMsg("");
+    $("vote-date").textContent = fmtDate(date);
+    $("vote-prev").disabled = !prevMatchDay(date);
+    $("vote-next").disabled = !nextMatchDay(date);
+    drawVote();
+    loadVotes(date);
+  }
+
+  function goVoteDate(d) {
+    if (!d) return;
+    renderVote(d);
+    replaceHash({ tab: "vote", date: d });
+  }
+
+  // 畫出這一天每一場：開賽前顯示兩個投票按鈕，開賽後鎖票，賽後對照「網友猜的」「我們預測的」「實際結果」
+  function drawVote() {
+    var date = voteDate;
+    var games = (gamesByDate[date] || []).filter(function (g) { return g.a && g.h && T[ABBR[g.a]] && T[ABBR[g.h]]; });
+    var list = $("vote-list");
+    list.innerHTML = "";
+    if (voteState === "err") setVoteMsg("票數暫時讀不到，請晚點再來!!");
+    var crowdOk = 0, crowdN = 0, modelOk = 0, modelN = 0;
+    games.forEach(function (g) {
+      var a = T[ABBR[g.a]], h = T[ABBR[g.h]];
+      var v = votes[voteKey(g)] || {};
+      var na = v.a || 0, nh = v.h || 0, tot = na + nh;
+      var open = voteOpen(g, date);
+      var pa = Math.round(na / (tot || 1) * 100);
+
+      var mid;
+      if (g.s === "F") {
+        var homeWon = g.hs > g.as;
+        mid = '<div class="gm-score"><span class="gm-pts ' + (homeWon ? "lose" : "win") + '">' + g.as + "</span>" +
+          '<span class="gm-final"><b>' + (homeWon ? "▶" : "◀") + "</b>已完賽</span>" +
+          '<span class="gm-pts ' + (homeWon ? "win" : "lose") + '">' + g.hs + "</span></div>";
+      } else {
+        mid = '<div class="game-time">' + g.t + "</div>" +
+          (g.s === "L" ? '<div class="gm-sub live">進行中</div>' : open ? "" : '<div class="gm-sub">已開賽</div>');
+      }
+
+      var btns = open
+        ? '<div class="vote-btns"><button type="button" class="vote-btn" data-k="' + voteKey(g) + '" data-s="a">' + a.zh +
+          ' 贏</button><button type="button" class="vote-btn" data-k="' + voteKey(g) + '" data-s="h">' + h.zh + " 贏</button></div>"
+        : "";
+
+      var bar = '<div class="vote-bar' + (tot ? "" : " empty") + '"><span class="vb-a" style="width:' + pa + '%"></span></div>' +
+        '<div class="vote-nums"><span>' + a.zh + " " + (voteState === "ok" ? na + " 票" + (tot ? "（" + pa + "%）" : "") : "—") + "</span><span>" +
+        h.zh + " " + (voteState === "ok" ? nh + " 票" + (tot ? "（" + (100 - pa) + "%）" : "") : "—") + "</span></div>";
+
+      // 開賽後的對照：網友多數猜誰、我們預測誰；已完賽的再標對錯
+      var info = "";
+      if (!open && voteState === "ok") {
+        var lines = [];
+        var crowd = na === nh ? null : (na > nh ? "away" : "home");
+        var pi = g.s === "F" && MODEL ? preGameInfo(g) : null;
+        if (tot) {
+          var cm = "";
+          if (g.s === "F" && crowd) {
+            var ok = (crowd === "home") === (g.hs > g.as);
+            crowdN++; if (ok) crowdOk++;
+            cm = ok ? " ✅" : " ❌";
+          }
+          lines.push("網友多數猜 " + (crowd ? (crowd === "home" ? h : a).zh + " 勝" : "平手") + cm);
+        }
+        var c = pi ? pi.c : (MODEL && g.s !== "F" ? compareModels(a, h, g.n) : null);
+        if (c) {
+          if (pi) { modelN++; if (pi.ok1) modelOk++; }
+          lines.push("我們預測 " + (c.w1 === "home" ? h : a).zh + " 勝（" + confHtml(c.p1) + "）" + (pi ? (pi.ok1 ? " ✅" : " ❌") : ""));
+        }
+        info = lines.length ? '<div class="game-pred">' + lines.join("<br>") + "</div>" : "";
+      }
+
+      var li = document.createElement("li");
+      li.innerHTML = '<div class="game vote-card"><div class="gm-row">' + teamCell(a) + '<div class="gm-mid">' + mid + "</div>" +
+        teamCell(h) + "</div>" + btns + bar + info + "</div>";
+      list.appendChild(li);
+    });
+    if (!games.length) list.innerHTML = '<li class="game-empty"><p>' + fmtDate(date) + "沒有比賽。</p></li>";
+    var sum = $("vote-summary");
+    sum.hidden = !(crowdN || modelN);
+    sum.innerHTML = '網友猜對 <span class="ok">' + crowdOk + "</span> / " + crowdN + " 場　我們猜對 <span class=\"ok\">" + modelOk + "</span> / " + modelN + " 場";
+  }
+
+  function castVote(date, key, side) {
+    var v = votes[key] || (votes[key] = {});
+    v[side] = (v[side] || 0) + 1;  // 先在畫面上加 1，不用等伺服器
+    drawVote();
+    var body = {};
+    body[side] = { ".sv": { increment: 1 } };  // 叫伺服器自己加 1，兩個人同時投也不會互相蓋掉
+    votePending++;
+    fetch(voteUrl(date + "/" + key), { method: "PATCH", body: JSON.stringify(body) })
+      .then(function (r) { if (!r.ok) throw new Error(r.status); })
+      .catch(function () {
+        v[side]--;
+        if (voteDate === date) { setVoteMsg("這票沒送出去，請晚點再試!!"); drawVote(); }
+      })
+      .then(function () {
+        votePending--;
+        if (!votePending && voteDate === date) loadVotes(date);  // 都送完了，重新讀一次，連別人剛投的一起更新
+      });
+  }
+
+  // 四個畫面：home 首頁、schedule 賽程、vote 投票、matchup 自選對戰（含賽程點進去的單場頁）、stats 準確率
   function showTab(name) {
-    ["home", "schedule", "matchup", "stats"].forEach(function (v) {
+    ["home", "schedule", "vote", "matchup", "stats"].forEach(function (v) {
       $("view-" + v).hidden = v !== name;
       $("tab-" + v).setAttribute("aria-current", v === name ? "page" : "false");
     });
@@ -805,6 +942,7 @@
     } else {
       box.hidden = true;
     }
+    $("home-vote").hidden = !VOTE_ON;
     var s = accuracyRows();
     $("home-stats-sub").textContent = s.length ? "猜對 " + s.filter(function (r) { return r.ok; }).length + " / " + s.length : "";
     renderStandings();
@@ -925,6 +1063,12 @@
       renderStats();
       return;
     }
+    if (VOTE_ON && p.get("tab") === "vote") {
+      showTab("vote");
+      var vd = p.get("date");
+      renderVote(isDate(vd) && gamesByDate[vd] ? vd : (nextUpcomingDate() || lastDate));
+      return;
+    }
     if (hasUpcoming() && p.get("tab") === "schedule") {
       showTab("schedule");
       renderSchedule(clampDate(p.get("date") || nextGameDate(todayTW()) || lastDate));
@@ -984,6 +1128,16 @@
       location.hash = hashOf({ tab: "schedule", date: curDate || nextGameDate(todayTW()) || lastDate });
     });
     $("tab-home").addEventListener("click", function () { location.hash = hashOf({ tab: "home" }); });
+    if (VOTE_ON) {
+      $("tab-vote").hidden = false;
+      $("tab-vote").addEventListener("click", function () { location.hash = hashOf({ tab: "vote", date: voteDate }); });
+      $("vote-prev").addEventListener("click", function () { goVoteDate(prevMatchDay(voteDate)); });
+      $("vote-next").addEventListener("click", function () { goVoteDate(nextMatchDay(voteDate)); });
+      $("vote-list").addEventListener("click", function (e) {
+        var b = e.target.closest ? e.target.closest(".vote-btn") : null;
+        if (b) castVote(voteDate, b.getAttribute("data-k"), b.getAttribute("data-s"));
+      });
+    }
     $("st-east").addEventListener("click", function () { stConf = "E"; renderStandings(); });
     $("st-west").addEventListener("click", function () { stConf = "W"; renderStandings(); });
     $("tab-stats").addEventListener("click", function () { location.hash = hashOf({ tab: "stats" }); });
