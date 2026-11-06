@@ -130,10 +130,16 @@
     return 1.05 / (lum + 0.05) >= 4.5 ? "#fff" : "#000";
   }
 
-  function teamBlock(t, role, score, isWinner) {
+  // 連勝：超過 3 連勝（4 連勝起）才在隊徽上方標出來
+  var STREAK_MIN = 4;
+  function streakText(t) { return t.streak >= STREAK_MIN ? "🔥 " + t.streak + " 連勝" : ""; }
+
+  // streak：undefined = 不留位置；字串 = 隊徽上方那一行（空字串留空白，讓兩隊的隊徽仍然對齊）
+  function teamBlock(t, role, score, isWinner, streak) {
     var el = document.createElement("div");
     el.className = "team" + (isWinner ? " winner" : "");
     el.innerHTML =
+      (streak === undefined ? "" : '<div class="streak">' + (streak || "&nbsp;") + "</div>") +
       '<span class="badge" style="background:' + t.color + ";color:" + badgeTextColor(t.color) + '">' + t.abbr + "</span>" +
       '<div class="name">' + t.zh + "</div>" +
       '<div class="role">' + role + "</div>" +
@@ -303,8 +309,10 @@
     var wPace = winnerOf(pace);
 
     // 主記分板
-    setBlock("board-away", teamBlock(a, "客隊", pace.away, wPace === "away"));
-    setBlock("board-home", teamBlock(h, "主隊", pace.home, wPace === "home"));
+    // 任一隊連勝超過 3 場，兩隊都留出隊徽上方那一行（沒連勝的留白），隊徽才不會一高一低
+    var showStreak = !pregame && (!!streakText(a) || !!streakText(h));
+    setBlock("board-away", teamBlock(a, "客隊", pace.away, wPace === "away", showStreak ? streakText(a) : undefined));
+    setBlock("board-home", teamBlock(h, "主隊", pace.home, wPace === "home", showStreak ? streakText(h) : undefined));
     var winTeam = wPace === "home" ? h : a;
     var diff = Math.abs(pace.home - pace.away);
     $("verdict-tag").textContent = winTeam.zh + " 勝";
@@ -370,7 +378,7 @@
     result.hidden = false;
     if (MODEL) {
       if (pregame) showRecordedOdds(a, h, aColor, hColor);
-      else renderOdds(aKey, hKey, a, h, aColor, hColor);
+      else renderOdds(aKey, hKey, a, h, aColor, hColor, streakTip(a, h, cmp.p1));
     }
   }
 
@@ -416,7 +424,13 @@
   function sgn(v) { return (v > 0 ? "+" : "") + f1(v); }          // 讓分顯示：+1.5 / -1.5
   function half(v) { return f1(Math.floor(v) + 0.5); }             // 單隊總分調成 .5 結尾（x.0 進位到 x.5）
 
-  function drawOdds(a, h, aColor, hColor, homeLine, totalLine, note, res) {
+  // 連勝隊（4 連勝起）被預測贏不到 3.5 分以上（含預測會輸）時，賭盤卡片多一行提示
+  function streakTip(a, h, p) {
+    var m = Math.round((Number(f1(p.home)) - Number(f1(p.away))) * 10) / 10;  // 預測主隊贏幾分（畫面比分相減）
+    return (a.streak >= STREAK_MIN && -m <= 3.5) || (h.streak >= STREAK_MIN && m <= 3.5);
+  }
+
+  function drawOdds(a, h, aColor, hColor, homeLine, totalLine, note, res, tip) {
     var UP = " ⬆️", DOWN = " ⬇️", OK = " ✅";
     var overUnder = function (actual, line) { return actual > line ? UP : actual < line ? DOWN : ""; };
     var rows = "";
@@ -435,7 +449,8 @@
     }
     if (!rows) return false;
     $("odds-body").innerHTML = '<div class="odds-title">' + (res ? "賭盤結果" : "賭盤") + '</div><table class="stats"><thead><tr><th style="color:' + aColor + '">' + a.zh +
-      '</th><th></th><th style="color:' + hColor + '">' + h.zh + "</th></tr></thead><tbody>" + rows + "</tbody></table>";
+      '</th><th></th><th style="color:' + hColor + '">' + h.zh + "</th></tr></thead><tbody>" + rows + "</tbody></table>" +
+      (tip ? '<div class="odds-tip">可以試試看高賠率方</div>' : "");
     $("odds-note").innerHTML = note + "<br>非投注建議，娛樂參考 !";
     return true;
   }
@@ -462,14 +477,14 @@
     return lines.map(function (t) { return "<div>" + t + "</div>"; }).join("");
   }
 
-  function showOdds(a, h, aColor, hColor, o) {  // 即時盤口（ESPN 賽事列表的 odds）
+  function showOdds(a, h, aColor, hColor, o, tip) {  // 即時盤口（ESPN 賽事列表的 odds）
     var ps = o.pointSpread, tot = o.total;
     var hl = ps && ps.home && ps.home.close;
     var ov = tot && tot.over && tot.over.close;
     var homeLine = hl ? lineNum(hl.line) : null;
     var totalLine = ov ? lineNum(ov.line) : (typeof o.overUnder === "number" ? o.overUnder : null);
     var hh = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(11, 16);
-    return drawOdds(a, h, aColor, hColor, homeLine, totalLine, "經 ESPN 取得 DraftKings 的賭盤概況，台灣時間 " + hh + " 更新");
+    return drawOdds(a, h, aColor, hColor, homeLine, totalLine, "經 ESPN 取得 DraftKings 的賭盤概況，台灣時間 " + hh + " 更新", null, tip);
   }
 
   // 已完賽的比賽：用 update 時存進賽程資料的收盤盤口（sp = 主隊讓分、ou = 總分；原始紀錄在 raw/odds_2026-27.json）
@@ -485,7 +500,7 @@
     card.hidden = false;
   }
 
-  function renderOdds(aKey, hKey, a, h, aColor, hColor) {
+  function renderOdds(aKey, hKey, a, h, aColor, hColor, tip) {
     var card = $("odds-card");
     var g = upcomingGameOf(a.abbr, h.abbr);
     var token = ++oddsToken;
@@ -514,8 +529,8 @@
         if (names.away === aKey && names.home === hKey) ev = comp;
       });
       var o = ev && ev.odds && ev.odds[0];
-      if (!o) return fail("這場目前還沒有盤口。");
-      if (!showOdds(a, h, aColor, hColor, o)) fail("這場目前還沒有盤口。");
+      if (!o) return fail("賭鬼 這場目前沒抓到賭盤 請晚點再來!!");
+      if (!showOdds(a, h, aColor, hColor, o, tip)) fail("賭鬼 這場目前沒抓到賭盤 請晚點再來!!");
     }, function () { fail("盤口暫時抓不到，稍後重新整理再試。"); });
   }
 

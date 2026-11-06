@@ -295,9 +295,14 @@ def team_rows(games, pace, with_model):
         hn = sum(1 for _, _, h in g if h)
         rw = sum(1 for p, o, h in g if not h and p > o)
         rn = n - hn
+        streak = 0  # 目前連勝場數（從最近一場往前數，遇到輸就停；最近一場輸了就是 0）
+        for p, o, _ in reversed(g):
+            if p <= o:
+                break
+            streak += 1
         out[en] = {
             "abbr": abbr, "zh": zh, "conf": conf, "color": color,
-            "gp": n, "w": wins, "l": n - wins,
+            "gp": n, "w": wins, "l": n - wins, "streak": streak,
             "home": f"{hw}-{hn - hw}", "road": f"{rw}-{rn - rw}",
             "pace": pace[en],
             # 本季 0 場的球隊（進行中模式才會有）沒有平均可算，輸出 null，網頁會顯示「尚未出賽」
