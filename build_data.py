@@ -31,7 +31,7 @@ SCHEDULE_FILE = "schedule_2026-27.json"  # 球季進行中：由 fetch_espn_game
 # 賽程分頁最早能看到的台灣日期：這天起的已完賽比賽會顯示「賽前預測比分 + 結果」，
 # 但只有「最近一個比賽日」的比賽能點進去看完整預測，更早的只能看卡片。
 # 想讓大家往前多看幾天，改這個日期（fetch_espn_games.py 的 SCHEDULE_START 也要跟著提早一天，再重抓）。
-SCHEDULE_SHOW_FROM = "2026-11-03"
+SCHEDULE_SHOW_FROM = "2026-11-01"
 # ESPN 的比賽備註 -> 網頁上顯示的標籤
 SCHEDULE_TAGS = {
     "NBA Cup - Group Play": "NBA 盃小組賽", "NBA Cup - Quarterfinals": "NBA 盃八強", "NBA Cup - Semifinals": "NBA 盃四強",
@@ -300,9 +300,14 @@ def team_rows(games, pace, with_model):
             if p <= o:
                 break
             streak += 1
+        lstreak = 0  # 目前連敗場數（最近一場贏了就是 0）；排名表的「W3 / L3」用
+        for p, o, _ in reversed(g):
+            if p >= o:
+                break
+            lstreak += 1
         out[en] = {
             "abbr": abbr, "zh": zh, "conf": conf, "color": color,
-            "gp": n, "w": wins, "l": n - wins, "streak": streak,
+            "gp": n, "w": wins, "l": n - wins, "streak": streak, "lstreak": lstreak,
             "home": f"{hw}-{hn - hw}", "road": f"{rw}-{rn - rw}",
             "pace": pace[en],
             # 本季 0 場的球隊（進行中模式才會有）沒有平均可算，輸出 null，網頁會顯示「尚未出賽」

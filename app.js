@@ -35,7 +35,7 @@
       statsTitle: "上季數據對照",
       l10note: "上季季末",
       h2hTitle: D.season + " 例行賽兩隊對戰 ",
-      source: "Basketball-Reference.com",
+      sources: ["Basketball-Reference.com"],
       foot: "整理自 " + D.season + " 例行賽 " + N_GAMES + " 場"
     },
     in_season: {
@@ -45,9 +45,8 @@
       recLabel: "本季戰績",
       l10note: "",
       h2hTitle: D.season + " 例行賽兩隊對戰 ",
-      source: D.h2hPrev
-        ? "ESPN（" + D.season + " 比分與 PACE、DraftKings 盤口）、Basketball-Reference.com（" + D.prevSeason + " 交手紀錄）"
-        : "ESPN（" + D.season + " 比分與 PACE、DraftKings 盤口）",
+      sources: ["ESPN（" + D.season + " 比分與 PACE、DraftKings 盤口）"]
+        .concat(D.h2hPrev ? ["Basketball-Reference.com（" + D.prevSeason + " 交手紀錄）"] : []),
       foot: "整理自 " + D.season + " 例行賽已完成的 " + N_GAMES + " 場（更新至 " + D.asOf + "）"
     }
   }[MODE];
@@ -541,7 +540,8 @@
 
   // ---------- 初始化 ----------
   document.title = COPY.title;
-  $("page-title").textContent = COPY.title;
+  $("page-title").textContent = COPY.title.replace(/^NBA\s*/, "");  // 「NBA」在標題上方的小字，這裡只放後面的字
+  $("page-kicker").textContent = "NBA · " + (MODE === "in_season" ? D.season : D.nextSeason);
   if (COPY.notice) {
     var noticeStrong = document.createElement("strong");
     noticeStrong.textContent = "資料說明：";
@@ -551,7 +551,8 @@
     $("notice").hidden = true;
   }
   $("stats-title").textContent = COPY.statsTitle;
-  $("foot-text").textContent = "數據來源：" + COPY.source + "，" + COPY.foot + "。僅供興趣參考。";
+  // 頁尾每項一行：資料來源、整理範圍、免責聲明
+  $("foot-text").innerHTML = COPY.sources.concat([COPY.foot, "僅供興趣參考，非投注建議!!"]).join("<br>");
 
   fillSelect(awaySel);
   fillSelect(homeSel);
@@ -675,10 +676,12 @@
 
   // 賽程列表的一場比賽，版型仿 NBA 官網：客隊在左、主隊在右，中間是開賽時間（已完賽改顯示比分）。
   // 能點的是連結，點了帶到那場的預測
-  function gameItem(g, date) {
+  // mode = "home"：首頁下拉清單用的簡版，中間不顯示開賽時間，改顯示我們預測的比分，底下只留信心
+  function gameItem(g, date, mode) {
     var a = g.a ? T[ABBR[g.a]] : null;
     var h = g.h ? T[ABBR[g.h]] : null;
     var pi = MODEL ? preGameInfo(g) : null;
+    var homePred = mode === "home" && MODEL && a && h && (g.s === "S" || g.s === "L") ? compareModels(a, h, g.n) : null;
     var past = date < todayTW();
     var clickable = isClickable(g, date);
     var el = document.createElement(clickable ? "a" : "div");
@@ -690,7 +693,12 @@
 
     // 中間：已完賽顯示比分（贏的那隊加粗，箭頭指向勝方），其他顯示開賽時間
     var mid;
-    if (g.s === "F" && a && h) {
+    if (homePred) {  // 預測比分（預測會贏的那隊加粗，箭頭指向預測勝方）
+      var hw = homePred.w1 === "home";
+      mid = '<div class="gm-score"><span class="gm-pts pred ' + (hw ? "lose" : "win") + '">' + f1(homePred.p1.away) + "</span>" +
+        '<span class="gm-final"><b>' + (hw ? "▶" : "◀") + "</b>預測</span>" +
+        '<span class="gm-pts pred ' + (hw ? "win" : "lose") + '">' + f1(homePred.p1.home) + "</span></div>";
+    } else if (g.s === "F" && a && h) {
       var homeWon = g.hs > g.as;
       mid = '<div class="gm-score"><span class="gm-pts ' + (homeWon ? "lose" : "win") + '">' + g.as + "</span>" +
         '<span class="gm-final"><b>' + (homeWon ? "▶" : "◀") + "</b>已完賽" +
@@ -714,6 +722,8 @@
       line = "這天已經過去，更新資料後會顯示結果";
     } else if (!(a && h)) {
       line = "兩隊要等前一輪打完才決定";
+    } else if (homePred) {
+      line = confHtml(homePred.p1);
     } else if (MODEL && date === nextUpcomingDate()) {  // 只有「下一個比賽日」顯示預測和信心，更後面的日子先不顯示
       var c = compareModels(a, h, g.n);
       var win = c.w1 === "home" ? h : a;
@@ -765,12 +775,101 @@
     replaceHash({ tab: "schedule", date: d });
   }
 
+  // 四個畫面：home 首頁、schedule 賽程、matchup 自選對戰（含賽程點進去的單場頁）、stats 準確率
   function showTab(name) {
-    var sched = name === "schedule";
-    $("view-schedule").hidden = !sched;
-    $("view-matchup").hidden = sched;
-    $("tab-matchup").setAttribute("aria-current", sched ? "false" : "page");
-    $("tab-schedule").setAttribute("aria-current", sched ? "page" : "false");
+    ["home", "schedule", "matchup", "stats"].forEach(function (v) {
+      $("view-" + v).hidden = v !== name;
+      $("tab-" + v).setAttribute("aria-current", v === name ? "page" : "false");
+    });
+    $("tabs").hidden = !hasUpcoming() || name === "home";  // 首頁自己就是選單，不再顯示分頁列
+  }
+
+  // ---------- 首頁：賽程卡片顯示下一個比賽日，準確率卡片顯示目前戰績 ----------
+  var stConf = "E";  // 排名現在看哪一區：E 東區、W 西區
+
+  function renderHome() {
+    var nd = nextUpcomingDate(), t = todayTW();
+    // 賽程卡片的小字：下一個比賽日是今天 / 明天就直接這樣說，不然寫日期
+    $("home-schedule-desc").textContent = nd
+      ? (nd === t ? "今天" : nd === addDays(t, 1) ? "明天" : fmtDate(nd)) + "的比賽預測"
+      : "賽程與預測";
+    // 下拉：點開就看到下一個比賽日的每一場（隊伍、我們預測的比分、信心），點哪一場就直接進那場
+    var box = $("home-games-box");
+    if (nd && MODEL) {
+      var list = $("home-games");
+      list.innerHTML = "";
+      gamesByDate[nd].forEach(function (g) { list.appendChild(gameItem(g, nd, "home")); });
+      $("home-games-sum").textContent = "展開看 " + gamesByDate[nd].length + " 場預測";
+      box.hidden = false;
+    } else {
+      box.hidden = true;
+    }
+    var s = accuracyRows();
+    $("home-stats-sub").textContent = s.length ? "猜對 " + s.filter(function (r) { return r.ok; }).length + " / " + s.length : "";
+    renderStandings();
+  }
+
+  // ---------- 排名：東區 / 西區，勝率高到低；勝差 = 和第一名相差幾場；近況 = 目前連勝（W）或連敗（L） ----------
+  function renderStandings() {
+    $("st-east").setAttribute("aria-pressed", stConf === "E" ? "true" : "false");
+    $("st-west").setAttribute("aria-pressed", stConf === "W" ? "true" : "false");
+    var list = Object.keys(T).map(function (k) { return T[k]; }).filter(function (t) { return t.conf === stConf; });
+    var pct = function (t) { return t.w + t.l ? t.w / (t.w + t.l) : 0; };
+    list.sort(function (a, b) { return pct(b) - pct(a) || b.w - a.w || a.zh.localeCompare(b.zh, "zh-Hant"); });
+    var lead = list[0];
+    $("st-body").innerHTML = list.map(function (t, i) {
+      var gb = ((lead.w - t.w) + (t.l - lead.l)) / 2;
+      var run = t.streak > 0 ? '<span class="st-w">W' + t.streak + "</span>" : t.lstreak > 0 ? '<span class="st-l">L' + t.lstreak + "</span>" : "—";
+      return "<tr><td>" + (i + 1) + "</td>" +
+        '<td><div class="st-team">' + miniBadge(t) + "<span>" + t.zh + "</span></div></td>" +
+        "<td>" + t.w + "</td><td>" + t.l + "</td><td>" + (i === 0 ? "—" : String(gb)) + "</td><td>" + run + "</td></tr>";
+    }).join("");
+  }
+
+  // ---------- 準確率：已完賽、有賽前數據的比賽，賽前預測（大比分）猜得準不準 ----------
+  // 三季回測（3643 場）的對照數字
+  var BACKTEST = { all: "66.3%", low: "54.1%", mid: "66.5%", high: "79.4%" };
+
+  function accuracyRows() {
+    var rows = [];
+    if (!MODEL || !SCHEDULE) return rows;
+    SCHEDULE.games.forEach(function (g) {
+      var pi = g.s === "F" ? preGameInfo(g) : null;
+      if (!pi) return;
+      rows.push({ d: g.d, ok: pi.ok1, lvl: confidenceOf(pi.c.p1).key });
+    });
+    return rows;
+  }
+
+  function pct(a, b) { return b ? (a * 100 / b).toFixed(1) + "%" : "—"; }
+
+  function renderStats() {
+    var rows = accuracyRows();
+    var box = $("stats-page");
+    if (!rows.length) { box.innerHTML = '<div class="card"><p class="odds-msg">還沒有已完賽的預測可以統計。</p></div>'; return; }
+    var right = rows.filter(function (r) { return r.ok; }).length;
+    var days = {}, order = [];
+    rows.forEach(function (r) { if (!days[r.d]) { days[r.d] = [0, 0]; order.push(r.d); } days[r.d][1]++; if (r.ok) days[r.d][0]++; });
+    order.sort();
+
+    var html = '<div class="card acc-big"><div class="acc-label">賽前預測猜對勝負（台灣 ' + fmtDate(order[0]) + " 起，共 " + rows.length + " 場）</div>" +
+      '<div class="acc-num">' + right + " / " + rows.length + "<small>" + pct(right, rows.length) + "</small></div>" +
+      '<p class="acc-note">三季回測 ' + BACKTEST.all + "；每一場都是用開賽前的數據預測，沒有看過結果</p></div>";
+
+    // 每天的明細會越來越長（每個比賽日一列），預設收起來，點開才看
+    html += '<details class="card acc-details"><summary>每天（' + order.length + ' 個比賽日）</summary><table class="acc-table"><thead><tr><th>日期（台灣）</th><th>猜對</th><th>準確率</th></tr></thead><tbody>' +
+      order.map(function (d) { return "<tr><td>" + fmtDate(d) + "</td><td>" + days[d][0] + " / " + days[d][1] + "</td><td>" + pct(days[d][0], days[d][1]) + "</td></tr>"; }).join("") +
+      "</tbody><tfoot><tr><td>合計</td><td>" + right + " / " + rows.length + "</td><td>" + pct(right, rows.length) + "</td></tr></tfoot></table></details>";
+
+    html += '<div class="card"><h2>依信心</h2><table class="acc-table"><thead><tr><th>信心</th><th>猜對</th><th>準確率</th><th>三季回測</th></tr></thead><tbody>' +
+      [["low", "低信心"], ["mid", "中信心"], ["high", "高信心"]].map(function (x) {
+        var sub = rows.filter(function (r) { return r.lvl === x[0]; });
+        var ok = sub.filter(function (r) { return r.ok; }).length;
+        return '<tr><td><span class="conf conf-' + x[0] + '">' + x[1] + "</span></td><td>" + ok + " / " + sub.length + "</td><td>" + pct(ok, sub.length) +
+          '</td><td class="muted">' + BACKTEST[x[0]] + "</td></tr>";
+      }).join("") + "</tbody></table></div>";
+
+    box.innerHTML = html;
   }
 
   function updateBack() {
@@ -815,6 +914,16 @@
   // 依網址決定要顯示哪一層、哪一場
   function applyHash() {
     var p = readHash();
+    if (hasUpcoming() && (p.get("tab") === "home" || (!p.get("tab") && !p.get("away") && !p.get("home")))) {
+      showTab("home");
+      renderHome();
+      return;
+    }
+    if (hasUpcoming() && p.get("tab") === "stats") {
+      showTab("stats");
+      renderStats();
+      return;
+    }
     if (hasUpcoming() && p.get("tab") === "schedule") {
       showTab("schedule");
       renderSchedule(clampDate(p.get("date") || nextGameDate(todayTW()) || lastDate));
@@ -873,6 +982,14 @@
     $("tab-schedule").addEventListener("click", function () {
       location.hash = hashOf({ tab: "schedule", date: curDate || nextGameDate(todayTW()) || lastDate });
     });
+    $("tab-home").addEventListener("click", function () { location.hash = hashOf({ tab: "home" }); });
+    $("st-east").addEventListener("click", function () { stConf = "E"; renderStandings(); });
+    $("st-west").addEventListener("click", function () { stConf = "W"; renderStandings(); });
+    $("tab-stats").addEventListener("click", function () { location.hash = hashOf({ tab: "stats" }); });
+    // 點頁面最上面的標題也能回首頁
+    var title = $("page-title");
+    title.style.cursor = "pointer";
+    title.addEventListener("click", function () { location.hash = hashOf({ tab: "home" }); });
     $("date-input").addEventListener("change", function () { goDate($("date-input").value); });
     $("date-prev").addEventListener("click", function () { var d = prevMatchDay(curDate); if (d) goDate(d); });
     $("date-next").addEventListener("click", function () { var d = nextMatchDay(curDate); if (d) goDate(d); });
@@ -902,7 +1019,7 @@
 
   window.addEventListener("hashchange", applyHash);
 
-  if (location.hash) {
+  if (location.hash || hasUpcoming()) {  // 沒有網址參數時，有賽程就從首頁開始
     applyHash();
   } else {
     showTab("matchup");

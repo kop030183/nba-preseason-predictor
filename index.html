@@ -11,15 +11,60 @@
   <main class="wrap">
 
     <header class="hero">
-      <h1 id="page-title">NBA 對戰預測</h1>
-    </header>
+      <h1><span class="logo" id="page-kicker">NBA</span><span id="page-title">對戰預測</span></h1>    </header>
 
     <aside class="notice" id="notice" role="note"></aside>
 
     <nav class="tabs" id="tabs" aria-label="頁面切換" hidden>
-      <button type="button" class="tab" id="tab-matchup">自選對戰</button>
+      <button type="button" class="tab" id="tab-home">首頁</button>
       <button type="button" class="tab" id="tab-schedule">賽程</button>
+      <button type="button" class="tab" id="tab-matchup">自選對戰</button>
+      <button type="button" class="tab" id="tab-stats">準確率</button>
     </nav>
+
+    <!-- 首頁：三個大項目，賽程放最主要 -->
+    <section id="view-home" class="home" aria-label="首頁" hidden>
+      <div class="home-card home-main">
+        <a class="home-link" href="#tab=schedule">
+          <span class="home-title">📅 賽程</span>
+          <span class="home-desc" id="home-schedule-desc">明天的比賽預測</span>
+        </a>
+        <details class="home-games" id="home-games-box" hidden>
+          <summary id="home-games-sum">展開看預測</summary>
+          <ul class="game-list" id="home-games"></ul>
+        </details>
+      </div>
+      <div class="home-row">
+        <a class="home-card" href="#tab=matchup">
+          <span class="home-title">⚔️ 自選對戰</span>
+          <span class="home-desc">任選兩支球隊，看預測比分與信心</span>
+        </a>
+        <a class="home-card" href="#tab=stats">
+          <span class="home-title">🎯 準確率</span>
+          <span class="home-desc">📊 統計數據</span>
+          <span class="home-sub" id="home-stats-sub"></span>
+        </a>
+      </div>
+
+      <!-- 排名：東區 / 西區 -->
+      <div class="card standings" id="standings">
+        <div class="st-head">
+          <h2>排名</h2>
+          <div class="seg" role="group" aria-label="選擇分區">
+            <button type="button" class="seg-btn" id="st-east" aria-pressed="true">東區</button>
+            <button type="button" class="seg-btn" id="st-west" aria-pressed="false">西區</button>
+          </div>
+        </div>
+        <table class="st-table">
+          <thead><tr><th>#</th><th>球隊</th><th>勝</th><th>敗</th><th>勝差</th><th>近況</th></tr></thead>
+          <tbody id="st-body"></tbody>
+        </table>      </div>
+    </section>
+
+    <!-- 準確率：已完賽比賽的預測成績（用開賽前的數據算，全部在瀏覽器裡統計） -->
+    <section id="view-stats" aria-label="準確率" hidden>
+      <div id="stats-page"></div>
+    </section>
 
     <!-- 第二層：選日期，列出那天的賽程，點一場進到那場的預測 -->
     <section id="view-schedule" class="schedule" aria-label="賽程" hidden>
