@@ -138,6 +138,17 @@ a.home-card:hover, a.home-card:focus-visible { border-color: var(--accent); tran
   border-color: var(--accent);
   box-shadow: 0 8px 24px rgba(232, 89, 12, .18);
 }
+.home-main { position: relative; }
+.home-result {
+  position: absolute; top: 22px; right: 20px;
+  padding: 7px 14px; border-radius: 999px;
+  font-size: .85rem; font-weight: 800; text-decoration: none;
+  color: #1a1206;
+  background: linear-gradient(90deg, var(--accent), var(--accent2));
+  box-shadow: 0 3px 10px rgba(232, 89, 12, .3);
+  transition: transform .15s;
+}
+.home-result:hover, .home-result:focus-visible { transform: translateY(-1px); outline: 3px solid var(--accent); outline-offset: 2px; }
 .home-link { display: block; color: inherit; text-decoration: none; }
 .home-title { display: block; font-size: 1.1rem; font-weight: 800; }
 .home-main .home-title { font-size: 1.8rem; font-weight: 900; }

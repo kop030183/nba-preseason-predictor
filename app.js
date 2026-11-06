@@ -785,6 +785,15 @@
     $("home-schedule-desc").textContent = nd
       ? (nd === t ? "今天" : nd === addDays(t, 1) ? "明天" : fmtDate(nd)) + "的比賽預測"
       : "賽程與預測";
+    // 右上角按鈕：最近一個有打完比賽的日子的賽果（就是今天的話寫「今日賽果」，不然寫「最新賽果」）
+    var lastFinal = null;
+    SCHEDULE.games.forEach(function (g) { if (g.s === "F" && g.d <= t && (!lastFinal || g.d > lastFinal)) lastFinal = g.d; });
+    var res = $("home-result");
+    res.hidden = !lastFinal;
+    if (lastFinal) {
+      res.textContent = lastFinal === t ? "今日賽果" : "最新賽果";
+      res.href = hashOf({ tab: "schedule", date: lastFinal });
+    }
     // 下拉：點開就看到下一個比賽日的每一場（隊伍、我們預測的比分、信心），點哪一場就直接進那場
     var box = $("home-games-box");
     if (nd && MODEL) {
