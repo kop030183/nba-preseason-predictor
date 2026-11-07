@@ -6,12 +6,24 @@
   <title>NBA 對戰預測</title>
   <meta name="description" content="用 NBA 例行賽數據，預測任意兩支 NBA 球隊對戰的比分與勝負。">
   <link rel="stylesheet" href="style.css">
+  <script>
+    // 之前選過的主題：在畫面出來之前先套上，才不會先閃一下預設顏色
+    try { var t = localStorage.getItem("nba-theme"); if (/^(white|khaki|dark|black)$/.test(t)) document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+  </script>
 </head>
 <body>
   <main class="wrap">
 
     <header class="hero">
-      <h1><span class="logo" id="page-kicker">NBA</span><span id="page-title">對戰預測</span></h1>    </header>
+      <h1><span class="logo" id="page-kicker">NBA</span><span id="page-title">對戰預測</span></h1>
+      <div class="theme-pick" id="theme-pick" role="group" aria-label="選擇主題">
+        <span class="tp-label">主題</span>
+        <button type="button" class="tp-btn" data-t="white" aria-pressed="false"><span class="tp-dot"></span>白色</button>
+        <button type="button" class="tp-btn" data-t="khaki" aria-pressed="false"><span class="tp-dot"></span>卡其</button>
+        <button type="button" class="tp-btn" data-t="dark" aria-pressed="false"><span class="tp-dot"></span>深色</button>
+        <button type="button" class="tp-btn" data-t="black" aria-pressed="false"><span class="tp-dot"></span>黑色</button>
+      </div>
+    </header>
 
     <aside class="notice" id="notice" role="note"></aside>
 

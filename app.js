@@ -1474,9 +1474,30 @@
   });
 
   // 使用者切換淺色/深色模式時，隊色要跟著重新調整
-  if (window.matchMedia) {
-    var darkMq = window.matchMedia("(prefers-color-scheme: dark)");
-    var onTheme = function () { render(); if (VOTE_ON && voteDate) redrawVote(); };  // 投票條的隊色也要跟著重算
+  var onTheme = function () { markTheme(); render(); if (VOTE_ON && voteDate) redrawVote(); };  // 投票條的隊色也要跟著重算
+
+  // 主題選擇：白色 / 卡其 / 深色 / 黑色。沒選過就跟系統（淺色 = 卡其、深色 = 黑色）；選過記在 localStorage
+  var darkMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
+  function currentTheme() {
+    var t = document.documentElement.getAttribute("data-theme");
+    return t || (darkMq && darkMq.matches ? "black" : "khaki");
+  }
+  function markTheme() {  // 目前這個主題的按鈕亮起來
+    var cur = currentTheme();
+    Array.prototype.forEach.call(document.querySelectorAll("#theme-pick .tp-btn"), function (b) {
+      b.setAttribute("aria-pressed", b.getAttribute("data-t") === cur ? "true" : "false");
+    });
+  }
+  Array.prototype.forEach.call(document.querySelectorAll("#theme-pick .tp-btn"), function (b) {
+    b.addEventListener("click", function () {
+      var t = b.getAttribute("data-t");
+      document.documentElement.setAttribute("data-theme", t);
+      try { localStorage.setItem("nba-theme", t); } catch (e) { /* 瀏覽器不讓存就這次有效而已 */ }
+      onTheme();
+    });
+  });
+  markTheme();
+  if (darkMq) {  // 沒選過主題、系統深淺色切換時，隊色也要跟著重新調整
     if (darkMq.addEventListener) darkMq.addEventListener("change", onTheme);
     else if (darkMq.addListener) darkMq.addListener(onTheme);
   }
