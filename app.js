@@ -861,6 +861,8 @@
         '<span class="gm-final"><b>' + (homeWon ? "▶" : "◀") + "</b>已完賽" +
         (pi ? '<span class="gm-res ' + (pi.ok1 ? "ok" : "bad") + '">' + (pi.ok1 ? "預測正確" : "預測失敗") + "</span>" : "") + "</span>" +
         '<span class="gm-pts ' + (homeWon ? "win" : "lose") + '">' + g.hs + "</span></div>";
+    } else if ((g.s === "S" || g.s === "L") && liveMidCache[date + "|" + g.a + "|" + g.h]) {
+      mid = liveMidCache[date + "|" + g.a + "|" + g.h];  // 已經抓到的即時比分，重畫時先用這份
     } else {
       mid = '<div class="game-time">' + g.t + "</div>" +
         (g.s === "L" ? '<div class="gm-sub live">進行中</div>' : g.s === "X" ? '<div class="gm-sub">延期或取消</div>' : "");
@@ -928,7 +930,7 @@
         jump.onclick = function () { goDate(next); };
       }
     }
-    startLive(date);
+    startLive(date, "schedule");
   }
 
   // ---------- 賽程區的即時比分 ----------
@@ -940,13 +942,17 @@
     if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
   }
 
-  function startLive(date) {
+  // 即時比分在兩個畫面都有：賽程（卡片列表 #game-list）和投票（#vote-list）
+  var LIVE_VIEWS = { schedule: { list: "#game-list", box: "view-schedule" }, vote: { list: "#vote-list", box: "view-vote" } };
+  var liveMidCache = {};  // "日期|客隊|主隊" -> 最近一次的中間欄 HTML；畫面重畫（例如投票後）時先用這份，不會閃回「進行中」
+
+  function startLive(date, view) {
     stopLive();
     var t = todayTW();
     if (date < addDays(t, -1) || date > addDays(t, 1)) return;  // 離今天太遠的日子不會有進行中的比賽
-    if (!document.querySelector("#game-list [data-live]")) return;
-    liveTick(date);
-    liveTimer = setInterval(function () { if (!document.hidden) liveTick(date); }, 30000);
+    if (!document.querySelector(LIVE_VIEWS[view].list + " [data-live]")) return;
+    liveTick(date, view);
+    liveTimer = setInterval(function () { if (!document.hidden) liveTick(date, view); }, 30000);
   }
 
   function livePeriod(st) {  // 第幾節 / 剩餘時間；回傳 [上一行, 下一行]
@@ -970,13 +976,14 @@
       '<span class="gm-pts ' + (lead === "away" ? "lose" : "win") + '">' + sc.home + "</span></div>";
   }
 
-  function liveTick(date) {
+  function liveTick(date, view) {
+    var V = LIVE_VIEWS[view];
     var games = (gamesByDate[date] || []).filter(function (g) { return g.s === "S" || g.s === "L"; });
     // 還沒有任何一場開打（或 10 分鐘內要開打）就不用去問 ESPN
     var soon = games.some(function (g) { return Date.now() >= new Date(g.d + "T" + g.t + ":00+08:00").getTime() - 600000; });
     if (!soon) return;
     Promise.all([fetchScoreboard(addDays(date, -1), 20000), fetchScoreboard(date, 20000)]).then(function (days) {
-      if (curDate !== date || $("view-schedule").hidden) return;  // 使用者已經換日期或離開賽程了
+      if ((view === "vote" ? voteDate : curDate) !== date || $(V.box).hidden) return;  // 使用者已經換日期或離開這個畫面了
       var byPair = {};
       days[0].concat(days[1]).forEach(function (e) {
         var comp = e.competitions && e.competitions[0];
@@ -985,7 +992,7 @@
         comp.competitors.forEach(function (c) { n[c.homeAway] = ESPN_NAME_FIX[c.team.displayName] || c.team.displayName; });
         byPair[n.away + "|" + n.home] = e;
       });
-      document.querySelectorAll("#game-list [data-live]").forEach(function (el) {
+      document.querySelectorAll(V.list + " [data-live]").forEach(function (el) {
         var k = el.getAttribute("data-live").split("_");
         var e = byPair[ABBR[k[0]] + "|" + ABBR[k[1]]];
         var name = e && e.status.type.name;
@@ -995,14 +1002,17 @@
           e.competitions[0].competitors.forEach(function (c) { sc[c.homeAway] = Number(c.score) || 0; });
           liveFinals[date + "|" + k[0] + "|" + k[1]] = { as: sc.away, hs: sc.home };
           var gm = (gamesByDate[date] || []).filter(function (x) { return x.a === k[0] && x.h === k[1]; })[0];
+          if (view === "vote") { drawVote(); return; }  // 投票頁整頁重畫：多了猜對/猜錯和統計
           if (gm && el.parentNode) {
             el.parentNode.replaceWith(gameItem(withLive(gm), date));
             drawDaySummary((gamesByDate[date] || []).map(withLive));
             return;
           }
         }
+        var html = liveMid(e);
+        liveMidCache[date + "|" + k[0] + "|" + k[1]] = html;
         var mid = el.querySelector(".gm-mid");
-        if (mid) mid.innerHTML = liveMid(e);
+        if (mid) mid.innerHTML = html;
       });
     }, function () { /* 這次抓不到就維持畫面原樣，30 秒後再試 */ });
   }
@@ -1054,6 +1064,7 @@
     $("vote-next").disabled = !nextMatchDay(date);
     drawVote();
     loadVotes(date);
+    startLive(date, "vote");
   }
 
   function goVoteDate(d) {
@@ -1114,7 +1125,7 @@
   // 投票頁：畫出這一天每一場，開賽前顯示兩個投票按鈕，開賽後鎖票，賽後對照「網友猜的」「我們預測的」「實際結果」
   function drawVote() {
     var date = voteDate;
-    var games = (gamesByDate[date] || []).filter(function (g) { return g.a && g.h && T[ABBR[g.a]] && T[ABBR[g.h]]; });
+    var games = (gamesByDate[date] || []).filter(function (g) { return g.a && g.h && T[ABBR[g.a]] && T[ABBR[g.h]]; }).map(withLive);
     var list = $("vote-list");
     list.innerHTML = "";
     if (voteState === "err") setVoteMsg("票數暫時讀不到，請晚點再來!!");
@@ -1131,13 +1142,15 @@
         mid = '<div class="gm-score"><span class="gm-pts ' + (homeWon ? "lose" : "win") + '">' + g.as + "</span>" +
           '<span class="gm-final"><b>' + (homeWon ? "▶" : "◀") + "</b>已完賽</span>" +
           '<span class="gm-pts ' + (homeWon ? "win" : "lose") + '">' + g.hs + "</span></div>";
+      } else if ((g.s === "S" || g.s === "L") && liveMidCache[date + "|" + g.a + "|" + g.h]) {
+        mid = liveMidCache[date + "|" + g.a + "|" + g.h];  // 即時比分（開賽後每 30 秒更新）
       } else {
         mid = '<div class="game-time">' + g.t + "</div>" +
           (g.s === "L" ? '<div class="gm-sub live">進行中</div>' : p.open ? "" : '<div class="gm-sub">已開賽</div>');
       }
 
       var li = document.createElement("li");
-      li.innerHTML = '<div class="game vote-card"><div class="gm-row">' + teamCell(a) + '<div class="gm-mid">' + mid + "</div>" +
+      li.innerHTML = '<div class="game vote-card"' + ((g.s === "S" || g.s === "L") ? ' data-live="' + g.a + "_" + g.h + '"' : "") + '><div class="gm-row">' + teamCell(a) + '<div class="gm-mid">' + mid + "</div>" +
         teamCell(h) + "</div>" + p.btns + p.bar + p.info + "</div>";
       list.appendChild(li);
     });
@@ -1204,7 +1217,7 @@
       $("view-" + v).hidden = v !== name;
       $("tab-" + v).setAttribute("aria-current", v === name ? "page" : "false");
     });
-    if (name !== "schedule") stopLive();  // 離開賽程就不用再更新即時比分
+    if (name !== "schedule" && name !== "vote") stopLive();  // 離開賽程和投票就不用再更新即時比分
     $("tabs").hidden = !hasUpcoming() || name === "home";  // 首頁自己就是選單，不再顯示分頁列
   }
 
