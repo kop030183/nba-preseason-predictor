@@ -850,7 +850,7 @@
       (g.n && a && h ? '<span class="game-tag">中立場地</span>' : "");
 
     // 中間：已完賽顯示比分（贏的那隊加粗，箭頭指向勝方），其他顯示開賽時間
-    var mid;
+    var mid, timeMid = false;  // timeMid：中間顯示的是開賽時間（不是比分），信心程度就放在時間下面
     if (homePred) {  // 預測比分（預測會贏的那隊加粗，箭頭指向預測勝方）
       var hw = homePred.w1 === "home";
       mid = '<div class="gm-score"><span class="gm-pts pred ' + (hw ? "lose" : "win") + '">' + f1(homePred.p1.away) + "</span>" +
@@ -865,6 +865,7 @@
     } else if ((g.s === "S" || g.s === "L") && liveMidCache[date + "|" + g.a + "|" + g.h]) {
       mid = liveMidCache[date + "|" + g.a + "|" + g.h];  // 已經抓到的即時比分，重畫時先用這份
     } else {
+      timeMid = true;
       mid = '<div class="game-time">' + g.t + "</div>" +
         (g.s === "L" ? '<div class="gm-sub live">進行中</div>' : g.s === "X" ? '<div class="gm-sub">延期或取消</div>' : "");
     }
@@ -887,7 +888,13 @@
     } else if (MODEL && date === nextUpcomingDate()) {  // 只有「下一個比賽日」顯示預測和信心，更後面的日子先不顯示
       var c = compareModels(a, h, g.n);
       var wn = c.w1 === "home" ? h.zh : a.zh;  // 預測會贏的那隊
-      line = "賽前預測比分：" + a.zh + " " + f1(c.p1.away) + " : " + f1(c.p1.home) + " " + h.zh + "<br>預測 <b>" + wn + "</b> 勝 · " + confHtml(c.p1);
+      line = "賽前預測比分：" + a.zh + " " + f1(c.p1.away) + " : " + f1(c.p1.home) + " " + h.zh + "<br>預測 <b>" + wn + "</b> 勝";
+      if (timeMid) {  // 信心程度移到開賽時間下面（置中）；已經開打、中間換成即時比分的，就還是接在下面那行
+        mid += '<div class="gm-conf">' + confHtml(c.p1) + "</div>";
+        el.setAttribute("data-cm", "1");  // 記號：中間這塊含信心，即時比分來時整張卡重畫（不然信心會跟著時間一起被蓋掉）
+      } else {
+        line += " · " + confHtml(c.p1);
+      }
     }
 
     el.innerHTML = (tags ? '<div class="gm-tags">' + tags + "</div>" : "") +
@@ -1056,6 +1063,10 @@
         if (view === "home" && el.parentNode) {  // 首頁簡版原本中間是預測比分、下面只有信心：改成跟賽程一樣（中間即時比分、下面賽前預測比分），所以整張重畫
           var gh = (gamesByDate[date] || []).filter(function (x) { return x.a === k[0] && x.h === k[1]; })[0];
           if (gh) { el.parentNode.replaceWith(gameItem(gh, date, "home")); return; }
+        }
+        if (el.hasAttribute("data-cm") && el.parentNode) {  // 信心原本放在開賽時間下面：整張重畫，信心改回接在下面那行
+          var gc = (gamesByDate[date] || []).filter(function (x) { return x.a === k[0] && x.h === k[1]; })[0];
+          if (gc) { el.parentNode.replaceWith(gameItem(gc, date, view === "home" ? "home" : undefined)); return; }
         }
         var mid = el.querySelector(".gm-mid");
         if (mid) mid.innerHTML = html;

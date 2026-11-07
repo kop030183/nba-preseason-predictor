@@ -365,6 +365,8 @@ a.game:hover { border-color: var(--accent); }
 .gm-rec { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
 .gm-mid { min-width: 4.5em; text-align: center; }
 .game-time { font-size: 1.6rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
+.gm-conf { margin-top: 5px; font-size: .95rem; position: relative; top: 11px; }  /* 賽程卡片：開賽時間下面的信心程度（置中靠 .gm-mid 的 text-align；top 只視覺下移，對齊兩側戰績那一行） */
+.gm-mid:has(.gm-conf) .game-time { position: relative; top: 11px; }  /* 時間下面有信心時，整塊會被撐高、時間偏上：視覺下移，回到和沒有信心的卡片同樣的高度（兩側球隊那一欄的正中間） */
 .gm-sub { color: var(--muted); font-size: .75rem; }
 .gm-sub.live { color: var(--accent); font-weight: 600; }
 .gm-score { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; }  /* 兩邊比分各佔一半寬，中間的「已完賽」才會永遠在正中央（119 和 80 位數不同也一樣） */
@@ -384,7 +386,7 @@ a.game:hover { border-color: var(--accent); }
 .gm-final b { display: block; color: var(--text); font-size: .9rem; }
 .gm-final.live { color: var(--accent); font-weight: 700; }  /* 即時比分：第幾節、剩餘時間用主色 */
 .gm-final.live b { color: var(--accent); }
-.gm-res { display: block; margin-top: 7px; font-size: .75rem; }
+.gm-res { display: block; margin-top: 11px; font-size: .85rem; position: relative; top: 5px; }  /* top：只視覺下移，對齊兩側的戰績那一行，不推動比分 */
 .mini-badge {
   display: inline-block;
   min-width: 42px; padding: 1px 8px;
