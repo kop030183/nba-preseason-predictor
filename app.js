@@ -1303,6 +1303,13 @@
       res.textContent = lastFinal === t ? "今日賽果" : "最新賽果";
       res.href = hashOf({ tab: "schedule", date: lastFinal });
     }
+    // 右上角第二顆按鈕：直接去下一個比賽日的賽程（明天有比賽就寫「明日賽程」，今天還沒打完寫「今日賽程」，其他寫「下個賽程」）
+    var nx = $("home-next");
+    nx.hidden = !nd;
+    if (nd) {
+      nx.textContent = nd === addDays(t, 1) ? "明日賽程" : nd === t ? "今日賽程" : "下個賽程";
+      nx.href = hashOf({ tab: "schedule", date: nd });
+    }
     // 下拉：點開就看到下一個比賽日的每一場（隊伍、我們預測的比分、信心），點哪一場就直接進那場
     var box = $("home-games-box");
     if (nd && MODEL) {
