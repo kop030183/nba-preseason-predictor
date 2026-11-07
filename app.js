@@ -1474,32 +1474,14 @@
   });
 
   // 使用者切換淺色/深色模式時，隊色要跟著重新調整
-  var onTheme = function () { markTheme(); render(); if (VOTE_ON && voteDate) redrawVote(); };  // 投票條的隊色也要跟著重算
-
-  // 主題選擇：白色 / 卡其 / 深色 / 黑色。沒選過就跟系統（淺色 = 卡其、深色 = 黑色）；選過記在 localStorage
+  // 主題選擇（白色 / 卡其 / 深色 / 黑色）的按鈕、記憶、亮起都在 index.html 的 script 裡處理；這裡只負責換色之後重畫
+  var onTheme = function () { render(); if (VOTE_ON && voteDate) redrawVote(); };  // 隊色、投票條的顏色要跟著新的底色重算
+  window.addEventListener("nba-theme", onTheme);
   var darkMq = window.matchMedia ? window.matchMedia("(prefers-color-scheme: dark)") : null;
-  function currentTheme() {
-    var t = document.documentElement.getAttribute("data-theme");
-    return t || (darkMq && darkMq.matches ? "black" : "khaki");
-  }
-  function markTheme() {  // 目前這個主題的按鈕亮起來
-    var cur = currentTheme();
-    Array.prototype.forEach.call(document.querySelectorAll("#theme-pick .tp-btn"), function (b) {
-      b.setAttribute("aria-pressed", b.getAttribute("data-t") === cur ? "true" : "false");
-    });
-  }
-  Array.prototype.forEach.call(document.querySelectorAll("#theme-pick .tp-btn"), function (b) {
-    b.addEventListener("click", function () {
-      var t = b.getAttribute("data-t");
-      document.documentElement.setAttribute("data-theme", t);
-      try { localStorage.setItem("nba-theme", t); } catch (e) { /* 瀏覽器不讓存就這次有效而已 */ }
-      onTheme();
-    });
-  });
-  markTheme();
   if (darkMq) {  // 沒選過主題、系統深淺色切換時，隊色也要跟著重新調整
-    if (darkMq.addEventListener) darkMq.addEventListener("change", onTheme);
-    else if (darkMq.addListener) darkMq.addListener(onTheme);
+    var onSys = function () { if (window.nbaMarkTheme) window.nbaMarkTheme(); onTheme(); };
+    if (darkMq.addEventListener) darkMq.addEventListener("change", onSys);
+    else if (darkMq.addListener) darkMq.addListener(onSys);
   }
 
   // 分頁與賽程控制（沒有賽程、或賽程都已過去就不顯示分頁）
