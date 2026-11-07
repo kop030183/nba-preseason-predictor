@@ -1,4 +1,4 @@
-##espn:125
+##espn:132
 Tue, Oct 20, 2026|Boston Celtics|113|Detroit Pistons|121
 Tue, Oct 20, 2026|Philadelphia 76ers|106|New York Knicks|100
 Tue, Oct 20, 2026|Oklahoma City Thunder|116|San Antonio Spurs|104
@@ -124,3 +124,10 @@ Thu, Nov 5, 2026|Orlando Magic|104|Phoenix Suns|117
 Thu, Nov 5, 2026|Miami Heat|100|Golden State Warriors|120
 Fri, Nov 6, 2026|Washington Wizards|132|Atlanta Hawks|139
 Fri, Nov 6, 2026|Boston Celtics|119|Charlotte Hornets|80
+Fri, Nov 6, 2026|Philadelphia 76ers|95|Cleveland Cavaliers|119
+Fri, Nov 6, 2026|Utah Jazz|100|Dallas Mavericks|112
+Fri, Nov 6, 2026|Oklahoma City Thunder|128|Memphis Grizzlies|97
+Fri, Nov 6, 2026|Toronto Raptors|121|Milwaukee Bucks|107
+Fri, Nov 6, 2026|Minnesota Timberwolves|115|New Orleans Pelicans|109
+Fri, Nov 6, 2026|Portland Trail Blazers|118|Los Angeles Lakers|124
+Fri, Nov 6, 2026|San Antonio Spurs|124|Sacramento Kings|109
