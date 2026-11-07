@@ -976,6 +976,54 @@
       '<span class="gm-pts ' + (lead === "away" ? "lose" : "win") + '">' + sc.home + "</span></div>";
   }
 
+  function pairIndex(events) {  // ESPN 賽事列表 -> { "客隊名|主隊名": 那場 }
+    var by = {};
+    events.forEach(function (e) {
+      var comp = e.competitions && e.competitions[0];
+      if (!comp) return;
+      var n = {};
+      comp.competitors.forEach(function (c) { n[c.homeAway] = ESPN_NAME_FIX[c.team.displayName] || c.team.displayName; });
+      by[n.away + "|" + n.home] = e;
+    });
+    return by;
+  }
+
+  function finalScore(e) {  // { as: 客隊得分, hs: 主隊得分 }
+    var sc = {};
+    e.competitions[0].competitors.forEach(function (c) { sc[c.homeAway] = Number(c.score) || 0; });
+    return { as: sc.away, hs: sc.home };
+  }
+
+  // 準確率、首頁的「猜對 X / Y」不顯示比賽卡片，只要知道「哪幾場剛打完」：
+  // 去問 ESPN 昨天、今天已經開打但資料還沒更新的比賽，打完的記進 liveFinals。回傳 Promise：有新打完的就是 true
+  function syncFinals() {
+    var t = todayTW(), jobs = [];
+    [addDays(t, -1), t].forEach(function (d) {
+      var games = (gamesByDate[d] || []).filter(function (g) {
+        return (g.s === "S" || g.s === "L") && Date.now() >= new Date(g.d + "T" + g.t + ":00+08:00").getTime();
+      });
+      if (!games.length) return;
+      jobs.push(Promise.all([fetchScoreboard(addDays(d, -1), 20000), fetchScoreboard(d, 20000)]).then(function (days) {
+        var by = pairIndex(days[0].concat(days[1])), changed = false;
+        games.forEach(function (g) {
+          var e = by[ABBR[g.a] + "|" + ABBR[g.h]], k = g.d + "|" + g.a + "|" + g.h;
+          if (e && e.status.type.name === "STATUS_FINAL" && !liveFinals[k]) { liveFinals[k] = finalScore(e); changed = true; }
+        });
+        return changed;
+      }, function () { return false; }));
+    });
+    return Promise.all(jobs).then(function (r) { return r.some(Boolean); });
+  }
+
+  var finalsTimer = null;
+  function stopFinalsPoll() { if (finalsTimer) { clearInterval(finalsTimer); finalsTimer = null; } }
+  function startFinalsPoll(redraw) {  // 開著準確率 / 首頁時，每 30 秒看有沒有新打完的比賽，有就重畫
+    stopFinalsPoll();
+    var tick = function () { if (!document.hidden) syncFinals().then(function (ch) { if (ch) redraw(); }); };
+    tick();
+    finalsTimer = setInterval(tick, 30000);
+  }
+
   function liveTick(date, view) {
     var V = LIVE_VIEWS[view];
     var games = (gamesByDate[date] || []).filter(function (g) { return g.s === "S" || g.s === "L"; });
@@ -984,23 +1032,14 @@
     if (!soon) return;
     Promise.all([fetchScoreboard(addDays(date, -1), 20000), fetchScoreboard(date, 20000)]).then(function (days) {
       if ((view === "vote" ? voteDate : curDate) !== date || $(V.box).hidden) return;  // 使用者已經換日期或離開這個畫面了
-      var byPair = {};
-      days[0].concat(days[1]).forEach(function (e) {
-        var comp = e.competitions && e.competitions[0];
-        if (!comp) return;
-        var n = {};
-        comp.competitors.forEach(function (c) { n[c.homeAway] = ESPN_NAME_FIX[c.team.displayName] || c.team.displayName; });
-        byPair[n.away + "|" + n.home] = e;
-      });
+      var byPair = pairIndex(days[0].concat(days[1]));
       document.querySelectorAll(V.list + " [data-live]").forEach(function (el) {
         var k = el.getAttribute("data-live").split("_");
         var e = byPair[ABBR[k[0]] + "|" + ABBR[k[1]]];
         var name = e && e.status.type.name;
         if (!e || name === "STATUS_SCHEDULED" || name === "STATUS_POSTPONED" || name === "STATUS_CANCELED") return;  // 還沒開打 / 延期：維持原樣
         if (name === "STATUS_FINAL") {  // 打完了：整張卡換成已完賽的樣子（預測正確/失敗、賽前預測比分，點進去是完賽頁）
-          var sc = {};
-          e.competitions[0].competitors.forEach(function (c) { sc[c.homeAway] = Number(c.score) || 0; });
-          liveFinals[date + "|" + k[0] + "|" + k[1]] = { as: sc.away, hs: sc.home };
+          liveFinals[date + "|" + k[0] + "|" + k[1]] = finalScore(e);
           var gm = (gamesByDate[date] || []).filter(function (x) { return x.a === k[0] && x.h === k[1]; })[0];
           if (view === "vote") { drawVote(); return; }  // 投票頁整頁重畫：多了猜對/猜錯和統計
           if (gm && el.parentNode) {
@@ -1218,6 +1257,7 @@
       $("tab-" + v).setAttribute("aria-current", v === name ? "page" : "false");
     });
     if (name !== "schedule" && name !== "vote") stopLive();  // 離開賽程和投票就不用再更新即時比分
+    if (name !== "home" && name !== "stats") stopFinalsPoll();  // 離開首頁和準確率就不用再看有沒有新打完的比賽
     $("tabs").hidden = !hasUpcoming() || name === "home";  // 首頁自己就是選單，不再顯示分頁列
   }
 
@@ -1251,9 +1291,13 @@
       box.hidden = true;
     }
     $("home-vote").hidden = !VOTE_ON;
+    drawHomeStats();
+    renderStandings();
+  }
+
+  function drawHomeStats() {
     var s = accuracyRows();
     $("home-stats-sub").textContent = s.length ? "猜對 " + s.filter(function (r) { return r.ok; }).length + " / " + s.length : "";
-    renderStandings();
   }
 
   // ---------- 排名：東區 / 西區，勝率高到低；勝差 = 和第一名相差幾場；近況 = 目前連勝（W）或連敗（L） ----------
@@ -1280,7 +1324,8 @@
   function accuracyRows() {
     var rows = [];
     if (!MODEL || !SCHEDULE) return rows;
-    SCHEDULE.games.forEach(function (g) {
+    SCHEDULE.games.forEach(function (g0) {
+      var g = withLive(g0);  // ESPN 剛說打完、資料還沒更新的比賽也算
       var pi = g.s === "F" ? preGameInfo(g) : null;
       if (!pi) return;
       rows.push({ d: g.d, ok: pi.ok1, lvl: confidenceOf(pi.c.p1).key });
@@ -1364,11 +1409,13 @@
     if (hasUpcoming() && (p.get("tab") === "home" || (!p.get("tab") && !p.get("away") && !p.get("home")))) {
       showTab("home");
       renderHome();
+      startFinalsPoll(function () { if (!$("view-home").hidden) drawHomeStats(); });
       return;
     }
     if (hasUpcoming() && p.get("tab") === "stats") {
       showTab("stats");
       renderStats();
+      startFinalsPoll(function () { if (!$("view-stats").hidden) renderStats(); });
       return;
     }
     if (VOTE_ON && p.get("tab") === "vote") {
