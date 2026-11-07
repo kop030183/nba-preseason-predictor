@@ -885,8 +885,7 @@
       line = confHtml(homePred.p1);
     } else if (MODEL && date === nextUpcomingDate()) {  // 只有「下一個比賽日」顯示預測和信心，更後面的日子先不顯示
       var c = compareModels(a, h, g.n);
-      var win = c.w1 === "home" ? h : a;
-      line = "預測：" + win.zh + " 勝（" + confHtml(c.p1) + "）";
+      line = "賽前預測比分：" + a.zh + " " + f1(c.p1.away) + " : " + f1(c.p1.home) + " " + h.zh + "<br>" + confHtml(c.p1);  // 和已完賽的卡片同一種寫法
     }
 
     el.innerHTML = (tags ? '<div class="gm-tags">' + tags + "</div>" : "") +
