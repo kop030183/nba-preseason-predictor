@@ -464,7 +464,13 @@
       overUnder(h.zh, hColor, ph, Number(half(totalLine / 2 - homeLine / 2)));
     }
     if (totalLine != null) overUnder("總分", "var(--text)", pa + ph, totalLine);
-    card.innerHTML = '<div class="odds-title">依預測選擇</div><div class="pick-list">' + lines.join("") + "</div>";
+    // 斷連勝提示：連勝隊（4 連勝起）被預測只贏 3.5 分以內，連勝有機會被打斷。
+    // 被預測會輸的連勝隊不提示；也只在「連勝隊同時是盤口熱門」時才提示，這樣高賠率方就一定是對手。連敗的隊不處理
+    var m = r1(ph - pa);  // 預測主隊贏幾分（畫面比分相減）
+    var streakSide = a.streak >= STREAK_MIN && -m > 0 && -m <= 3.5 ? "a" : h.streak >= STREAK_MIN && m > 0 && m <= 3.5 ? "h" : null;
+    var tip = streakSide && homeLine != null && (streakSide === "h" ? homeLine < 0 : homeLine > 0)
+      ? '<div class="pick-tip">依照經驗，連勝者預測贏不超過3.5分繼續連勝機率為50 50，可試試看買弱勢高賠一方</div>' : "";
+    card.innerHTML = '<div class="odds-title">依預測選擇</div><div class="pick-list">' + lines.join("") + "</div>" + tip;
     card.hidden = false;
   }
 

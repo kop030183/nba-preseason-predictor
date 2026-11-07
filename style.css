@@ -193,6 +193,7 @@ a.home-card:hover, a.home-card:focus-visible { border-color: var(--accent); tran
 
 /* 依預測選擇：一行一個選項，置中 */
 .pick-list { text-align: center; font-size: 1.05rem; font-weight: 700; line-height: 1.9; font-variant-numeric: tabular-nums; }
+.pick-tip { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line); text-align: center; color: var(--accent); font-size: .85rem; font-weight: 600; }
 
 /* 得分前三球員：左客隊、右主隊，同一排是同名次；每人四個數字（得分、籃板、助攻、+/-） */
 .pl-head { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 2px 0 6px; font-weight: 800; text-align: center; }
