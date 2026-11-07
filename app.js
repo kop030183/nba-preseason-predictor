@@ -1110,7 +1110,7 @@
           crowdRes = (crowd === "home") === (g.hs > g.as);
           cm = crowdRes ? " ✅" : " ❌";
         }
-        lines.push("網友多數猜 " + (crowd ? (crowd === "home" ? h : a).zh + " 勝" : "平手") + cm);
+        lines.push("網友多數猜 " + (crowd ? (crowd === "home" ? h : a).zh + " 勝" : "五五開") + cm);
       }
       var c = pi ? pi.c : (MODEL && g.s !== "F" ? compareModels(a, h, g.n) : null);
       if (c) {
