@@ -324,7 +324,9 @@ a.game:hover { border-color: var(--accent); }
 .game-time { font-size: 1.6rem; font-weight: 800; line-height: 1.1; font-variant-numeric: tabular-nums; }
 .gm-sub { color: var(--muted); font-size: .75rem; }
 .gm-sub.live { color: var(--accent); font-weight: 600; }
-.gm-score { display: flex; align-items: center; justify-content: center; gap: 10px; }
+.gm-score { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; }  /* 兩邊比分各佔一半寬，中間的「已完賽」才會永遠在正中央（119 和 80 位數不同也一樣） */
+.gm-score > :first-child { text-align: right; white-space: nowrap; }
+.gm-score > :last-child { text-align: left; white-space: nowrap; }
 .gm-pts { font-size: 1.8rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 .gm-pts.win { color: var(--text); }
 .gm-pts.lose { color: var(--muted); font-weight: 600; }
