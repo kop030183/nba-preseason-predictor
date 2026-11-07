@@ -56,12 +56,12 @@
 }
 
 /* 主題選擇：標題下面一排四個小按鈕，每個前面一顆該主題底色的小圓點 */
-.theme-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 16px; }
-.theme-pick .tp-label { color: var(--muted); font-size: .8rem; margin-right: 2px; }
+.theme-pick { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin: 12px 0 22px; }
+.theme-pick .tp-label { color: var(--muted); font-size: .85rem; margin-right: 4px; }
 .tp-btn {
-  display: inline-flex; align-items: center; gap: 6px;
-  font: inherit; font-size: .8rem; color: var(--text);
-  padding: 4px 10px 4px 6px; background: var(--surface);
+  display: inline-flex; align-items: center; gap: 7px;
+  font: inherit; font-size: .85rem; color: var(--text);
+  padding: 7px 14px 7px 9px; background: var(--surface);
   border: 1px solid var(--line); border-radius: 999px; cursor: pointer;
 }
 .tp-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 700; }
