@@ -837,7 +837,8 @@
     var a = g.a ? T[ABBR[g.a]] : null;
     var h = g.h ? T[ABBR[g.h]] : null;
     var pi = MODEL ? preGameInfo(g) : null;
-    var homePred = mode === "home" && MODEL && a && h && (g.s === "S" || g.s === "L") ? compareModels(a, h, g.n) : null;
+    // 首頁簡版：還沒開打的顯示預測比分；開打後已經抓到即時比分的，就跟賽程一樣顯示即時比分
+    var homePred = mode === "home" && MODEL && a && h && (g.s === "S" || g.s === "L") && !liveMidCache[date + "|" + g.a + "|" + g.h] ? compareModels(a, h, g.n) : null;
     var past = date < todayTW();
     var clickable = isClickable(g, date);
     var el = document.createElement(clickable ? "a" : "div");
@@ -942,7 +943,8 @@
   }
 
   // 即時比分在兩個畫面都有：賽程（卡片列表 #game-list）和投票（#vote-list）
-  var LIVE_VIEWS = { schedule: { list: "#game-list", box: "view-schedule" }, vote: { list: "#vote-list", box: "view-vote" } };
+  var LIVE_VIEWS = { schedule: { list: "#game-list", box: "view-schedule" }, vote: { list: "#vote-list", box: "view-vote" }, home: { list: "#home-games", box: "view-home" } };
+  var homeDate = null;  // 首頁下拉清單現在顯示的比賽日
   var liveMidCache = {};  // "日期|客隊|主隊" -> 最近一次的中間欄 HTML；畫面重畫（例如投票後）時先用這份，不會閃回「進行中」
 
   function startLive(date, view) {
@@ -1030,7 +1032,7 @@
     var soon = games.some(function (g) { return Date.now() >= new Date(g.d + "T" + g.t + ":00+08:00").getTime() - 600000; });
     if (!soon) return;
     Promise.all([fetchScoreboard(addDays(date, -1), 20000), fetchScoreboard(date, 20000)]).then(function (days) {
-      if ((view === "vote" ? voteDate : curDate) !== date || $(V.box).hidden) return;  // 使用者已經換日期或離開這個畫面了
+      if ((view === "vote" ? voteDate : view === "home" ? homeDate : curDate) !== date || $(V.box).hidden) return;  // 使用者已經換日期或離開這個畫面了
       var byPair = pairIndex(days[0].concat(days[1]));
       document.querySelectorAll(V.list + " [data-live]").forEach(function (el) {
         var k = el.getAttribute("data-live").split("_");
@@ -1042,13 +1044,18 @@
           var gm = (gamesByDate[date] || []).filter(function (x) { return x.a === k[0] && x.h === k[1]; })[0];
           if (view === "vote") { drawVote(); return; }  // 投票頁整頁重畫：多了猜對/猜錯和統計
           if (gm && el.parentNode) {
-            el.parentNode.replaceWith(gameItem(withLive(gm), date));
-            drawDaySummary((gamesByDate[date] || []).map(withLive));
+            el.parentNode.replaceWith(gameItem(withLive(gm), date, view === "home" ? "home" : undefined));
+            if (view === "home") drawHomeStats();  // 首頁準確率卡片的「猜對 X / Y」
+            else drawDaySummary((gamesByDate[date] || []).map(withLive));
             return;
           }
         }
         var html = liveMid(e);
         liveMidCache[date + "|" + k[0] + "|" + k[1]] = html;
+        if (view === "home" && el.parentNode) {  // 首頁簡版原本中間是預測比分、下面只有信心：改成跟賽程一樣（中間即時比分、下面賽前預測比分），所以整張重畫
+          var gh = (gamesByDate[date] || []).filter(function (x) { return x.a === k[0] && x.h === k[1]; })[0];
+          if (gh) { el.parentNode.replaceWith(gameItem(gh, date, "home")); return; }
+        }
         var mid = el.querySelector(".gm-mid");
         if (mid) mid.innerHTML = html;
       });
@@ -1255,7 +1262,7 @@
       $("view-" + v).hidden = v !== name;
       $("tab-" + v).setAttribute("aria-current", v === name ? "page" : "false");
     });
-    if (name !== "schedule" && name !== "vote") stopLive();  // 離開賽程和投票就不用再更新即時比分
+    if (name !== "schedule" && name !== "vote" && name !== "home") stopLive();  // 離開賽程、投票、首頁就不用再更新即時比分
     if (name !== "home" && name !== "stats") stopFinalsPoll();  // 離開首頁和準確率就不用再看有沒有新打完的比賽
     $("tabs").hidden = !hasUpcoming() || name === "home";  // 首頁自己就是選單，不再顯示分頁列
   }
@@ -1283,11 +1290,14 @@
     if (nd && MODEL) {
       var list = $("home-games");
       list.innerHTML = "";
-      gamesByDate[nd].forEach(function (g) { list.appendChild(gameItem(g, nd, "home")); });
+      gamesByDate[nd].map(withLive).forEach(function (g) { list.appendChild(gameItem(g, nd, "home")); });
       $("home-games-sum").textContent = "展開看 " + gamesByDate[nd].length + " 場預測";
       box.hidden = false;
+      homeDate = nd;
+      startLive(nd, "home");  // 開打後下拉清單裡也顯示即時比分，打完換成完賽樣子
     } else {
       box.hidden = true;
+      homeDate = null;
     }
     $("home-vote").hidden = !VOTE_ON;
     drawHomeStats();
