@@ -164,6 +164,7 @@ select:focus-visible, .swap:focus-visible {
 /* 首頁：三個大項目，賽程最大 */
 .home { display: grid; gap: 14px; }
 .home-row { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.home-row .home-card { text-align: center; }  /* 下面兩張小卡（自選對戰、準確率）：標題、說明、猜對場數都置中 */
 .home-card {
   display: block;
   padding: 18px 16px;
@@ -263,6 +264,23 @@ a.home-card:hover, a.home-card:focus-visible { border-color: var(--accent); tran
 .inj-what { margin-top: 2px; color: var(--muted); font-size: .82rem; }
 .inj-none { margin: 0; color: var(--muted); font-size: .85rem; }
 .inj-note { margin: 14px 0 0; text-align: center; color: var(--muted); font-size: .75rem; }
+
+/* 首頁傷病名單：卡片本身是可展開的，裡面東西區切換 + 每隊一列（再點展開那隊的傷病） */
+.inj-home summary { list-style: none; cursor: pointer; text-align: center; }
+.inj-home summary::-webkit-details-marker { display: none; }
+.inj-home > summary::after { content: "▾"; display: block; margin-top: 4px; color: var(--accent); transition: transform .15s; }
+.inj-home[open] > summary::after { transform: rotate(180deg); }
+.inj-home summary:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.inj-home-body { margin-top: 14px; text-align: left; }
+.inj-home-body > .seg { display: flex; width: max-content; margin: 0 auto; }
+.inj-t { border-top: 1px solid var(--line); }
+.inj-t > summary { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 2px; text-align: left; }
+.inj-t > summary .st-team { display: flex; align-items: center; gap: 8px; font-weight: 700; }
+.inj-t > summary::after { content: "▾"; margin: 0; color: var(--accent); transition: transform .15s; }
+.inj-t[open] > summary::after { transform: rotate(180deg); }
+.inj-cnt { display: inline-flex; gap: 4px; margin-left: auto; }
+.inj-t .inj-list { padding: 0 2px 8px; }
+.inj-t .inj-none { padding: 0 2px 10px; }
 
 /* 排名 */
 .standings { margin-bottom: 0; }
@@ -386,7 +404,9 @@ a.game:hover { border-color: var(--accent); }
 .gm-final b { display: block; color: var(--text); font-size: .9rem; }
 .gm-final.live { color: var(--accent); font-weight: 700; }  /* 即時比分：第幾節、剩餘時間用主色 */
 .gm-final.live b { color: var(--accent); }
-.gm-res { display: block; margin-top: 11px; font-size: .85rem; position: relative; top: 5px; }  /* top：只視覺下移，對齊兩側的戰績那一行，不推動比分 */
+/* 預測正確/失敗：脫離排版（absolute），不然會把「箭頭 + 已完賽」往上擠；箭頭、已完賽才能跟兩側比分在同一條水平線上。top 讓它落在兩側戰績那一行 */
+.gm-final { position: relative; }
+.gm-res { display: block; position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 2px); font-size: .85rem; white-space: nowrap; }  /* left 50% + 往左退自己一半寬 = 不管字比「已完賽」寬多少，都正中間 */
 .mini-badge {
   display: inline-block;
   min-width: 42px; padding: 1px 8px;

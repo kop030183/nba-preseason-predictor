@@ -69,7 +69,7 @@
       <div class="home-row">
         <a class="home-card" href="#tab=matchup">
           <span class="home-title">⚔️ 自選對戰</span>
-          <span class="home-desc">任選兩支球隊，看預測比分與信心</span>
+          <span class="home-desc">任選兩支球隊，看預測資訊</span>
         </a>
         <a class="home-card" href="#tab=stats">
           <span class="home-title">🎯 準確率</span>
@@ -81,6 +81,22 @@
       <a class="home-card home-vote" id="home-vote" href="#tab=vote" hidden>
         <span class="home-title">🗳️ 投票專區</span>
       </a>
+
+      <!-- 傷病名單：點開後選東區 / 西區，每隊一列，再點隊伍展開那隊的傷病（即時從 ESPN 抓，點開才抓） -->
+      <details class="home-card inj-home" id="inj-home">
+        <summary>
+          <span class="home-title">🚑 傷病名單</span>
+        </summary>
+        <div class="inj-home-body">
+          <div class="seg" role="group" aria-label="選擇分區">
+            <button type="button" class="seg-btn" id="inj-east" aria-pressed="true">東區</button>
+            <button type="button" class="seg-btn" id="inj-west" aria-pressed="false">西區</button>
+          </div>
+          <p class="inj-warn">預測數據沒有參考傷病</p>
+          <div id="inj-teams"></div>
+          <p class="inj-note" id="inj-home-note"></p>
+        </div>
+      </details>
 
       <!-- 排名：東區 / 西區 -->
       <div class="card standings" id="standings">

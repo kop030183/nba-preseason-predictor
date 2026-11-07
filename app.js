@@ -671,6 +671,13 @@
       " " + st + '</div><div class="inj-what">' + [place + kind, ret].filter(Boolean).join("・") + "</div></li>";
   }
 
+  // 傷病名單排序：缺陣在前、每日觀察其次、其他最後
+  function injSorted(list) {
+    var order = { "Out": 0, "Day-To-Day": 1 };
+    var rank = function (x) { return order[x.status] != null ? order[x.status] : 2; };
+    return (list || []).slice().sort(function (x, y) { return rank(x) - rank(y); });
+  }
+
   function renderInjuries(aKey, hKey, a, h, aColor, hColor) {
     var card = $("inj-card");
     var token = ++injToken;
@@ -679,9 +686,8 @@
     card.hidden = false;
     fetchInjuries().then(function (res) {
       if (token !== injToken) return;
-      var order = { "Out": 0, "Day-To-Day": 1 };
       var team = function (key, t, color) {
-        var list = (res.by[key] || []).slice().sort(function (x, y) { return (order[x.status] != null ? order[x.status] : 2) - (order[y.status] != null ? order[y.status] : 2); });
+        var list = injSorted(res.by[key]);
         return '<div class="inj-team" style="color:' + color + '">' + t.zh + "</div>" +
           (list.length ? '<ul class="inj-list">' + list.map(injRow).join("") + "</ul>" : '<p class="inj-none">目前沒有傷病名單</p>');
       };
@@ -1322,12 +1328,19 @@
   }
 
   // ---------- 排名：東區 / 西區，勝率高到低；勝差 = 和第一名相差幾場；近況 = 目前連勝（W）或連敗（L） ----------
+  // 某一區（E / W）的球隊 key，照排名順序（勝率高到低）；排名表和傷病名單共用
+  function confKeys(conf) {
+    var pct = function (t) { return t.w + t.l ? t.w / (t.w + t.l) : 0; };
+    return Object.keys(T).filter(function (k) { return T[k].conf === conf; }).sort(function (x, y) {
+      var a = T[x], b = T[y];
+      return pct(b) - pct(a) || b.w - a.w || a.zh.localeCompare(b.zh, "zh-Hant");
+    });
+  }
+
   function renderStandings() {
     $("st-east").setAttribute("aria-pressed", stConf === "E" ? "true" : "false");
     $("st-west").setAttribute("aria-pressed", stConf === "W" ? "true" : "false");
-    var list = Object.keys(T).map(function (k) { return T[k]; }).filter(function (t) { return t.conf === stConf; });
-    var pct = function (t) { return t.w + t.l ? t.w / (t.w + t.l) : 0; };
-    list.sort(function (a, b) { return pct(b) - pct(a) || b.w - a.w || a.zh.localeCompare(b.zh, "zh-Hant"); });
+    var list = confKeys(stConf).map(function (k) { return T[k]; });
     var lead = list[0];
     $("st-body").innerHTML = list.map(function (t, i) {
       var gb = ((lead.w - t.w) + (t.l - lead.l)) / 2;
@@ -1336,6 +1349,38 @@
         '<td><div class="st-team">' + miniBadge(t) + "<span>" + t.zh + "</span></div></td>" +
         "<td>" + t.w + "</td><td>" + t.l + "</td><td>" + (i === 0 ? "—" : String(gb)) + "</td><td>" + run + "</td></tr>";
     }).join("");
+  }
+
+  // ---------- 首頁傷病名單：東區 / 西區，每隊一列（排名順序），點隊伍展開那隊的傷病 ----------
+  var injConf = "E";
+  var injHomeToken = 0;  // 很快連點東西區時，只畫最後一次的結果
+
+  function renderInjHome() {
+    $("inj-east").setAttribute("aria-pressed", injConf === "E" ? "true" : "false");
+    $("inj-west").setAttribute("aria-pressed", injConf === "W" ? "true" : "false");
+    var box = $("inj-teams");
+    var token = ++injHomeToken;
+    box.innerHTML = '<p class="odds-msg">載入中…</p>';
+    fetchInjuries().then(function (res) {
+      if (token !== injHomeToken) return;
+      box.innerHTML = confKeys(injConf).map(function (k) {
+        var list = injSorted(res.by[k]);
+        var out = list.filter(function (x) { return x.status === "Out"; }).length;
+        var dtd = list.filter(function (x) { return x.status === "Day-To-Day"; }).length;
+        var cnt = list.length
+          ? (out ? '<span class="inj-st out">缺陣 ' + out + "</span>" : "") + (dtd ? '<span class="inj-st dtd">觀察 ' + dtd + "</span>" : "") +
+            (list.length - out - dtd ? '<span class="inj-st">其他 ' + (list.length - out - dtd) + "</span>" : "")
+          : '<span class="inj-none">無</span>';
+        return '<details class="inj-t"><summary><span class="st-team">' + miniBadge(T[k]) + "<span>" + T[k].zh + '</span></span><span class="inj-cnt">' + cnt + "</span></summary>" +
+          (list.length ? '<ul class="inj-list">' + list.map(injRow).join("") + "</ul>" : '<p class="inj-none">目前沒有傷病名單</p>') + "</details>";
+      }).join("");
+      var hh = new Date(Date.now() + 8 * 3600 * 1000).toISOString().slice(11, 16);
+      $("inj-home-note").textContent = "經 ESPN 取得，台灣時間 " + hh + " 更新";
+    }, function () {
+      if (token !== injHomeToken) return;
+      box.innerHTML = '<p class="odds-msg">傷病名單暫時抓不到，稍後重新整理再試。</p>';
+      $("inj-home-note").textContent = "";
+    });
   }
 
   // ---------- 準確率：已完賽、有賽前數據的比賽，賽前預測（大比分）猜得準不準 ----------
@@ -1522,6 +1567,9 @@
     }
     $("st-east").addEventListener("click", function () { stConf = "E"; renderStandings(); });
     $("st-west").addEventListener("click", function () { stConf = "W"; renderStandings(); });
+    $("inj-home").addEventListener("toggle", function () { if (this.open) renderInjHome(); });  // 點開才去 ESPN 抓傷病
+    $("inj-east").addEventListener("click", function () { injConf = "E"; renderInjHome(); });
+    $("inj-west").addEventListener("click", function () { injConf = "W"; renderInjHome(); });
     $("tab-stats").addEventListener("click", function () { location.hash = hashOf({ tab: "stats" }); });
     // 點頁面最上面的標題也能回首頁
     var title = $("page-title");
