@@ -315,7 +315,8 @@ a.game:hover { border-color: var(--accent); }
 .game.is-static { opacity: .78; }
 /* 仿 NBA 官網：客隊在左、主隊在右，中間是開賽時間或比分 */
 .gm-tags { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
-.gm-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 8px; }
+.gm-row { display: grid; grid-template-columns: minmax(0, 1fr) 11rem minmax(0, 1fr); align-items: center; gap: 8px; }  /* 中間欄固定寬度：不管顯示開賽時間、即時比分或最終比分，兩隊的位置每張卡都對齊 */
+@media (max-width: 420px) { .gm-row { grid-template-columns: minmax(0, 1fr) 9.5rem minmax(0, 1fr); } .gm-score { gap: 6px; } }
 .gm-team { min-width: 0; text-align: center; }
 .gm-name { margin-top: 4px; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
 .gm-rec { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
