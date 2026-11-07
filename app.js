@@ -409,10 +409,10 @@
     return null;
   }
 
-  function fetchScoreboard(day) {  // day = 美東日期 "2026-11-05"；ESPN 不接受日期範圍，一天抓一次
+  function fetchScoreboard(day, ttl) {  // day = 美東日期 "2026-11-05"；ESPN 不接受日期範圍，一天抓一次；ttl = 幾毫秒內重用上次的結果（預設 60 秒，即時比分用 20 秒）
     var key = day.replace(/-/g, "");
     var hit = oddsCache[key];
-    if (hit && Date.now() - hit.t < 60000) return hit.p;
+    if (hit && Date.now() - hit.t < (ttl == null ? 60000 : ttl)) return hit.p;
     var p = fetch(ESPN_SB + key).then(function (r) {
       if (!r.ok) throw new Error("HTTP " + r.status);
       return r.json();
@@ -504,16 +504,30 @@
     card.hidden = false;
   }
 
+  // 這場開賽了嗎：進行中，或開賽時間（台灣時間）已經過了
+  function gameStarted(g) {
+    return g.s === "L" || Date.now() >= new Date(g.d + "T" + g.t + ":00+08:00").getTime();
+  }
+
   function renderOdds(aKey, hKey, a, h, aColor, hColor) {
     var card = $("odds-card");
     var g = upcomingGameOf(a.abbr, h.abbr);
     var token = ++oddsToken;
     if (!g) { card.hidden = true; return; }
+    // 更新資料時記下來的盤口（sp = 主隊讓分、ou = 總分）：ESPN 賽事列表一開賽就不給盤口了，開賽後就顯示這份，定案不再變動
+    var hasRec = g.sp != null && g.ou != null;
+    if (hasRec && gameStarted(g) &&
+      drawOdds(a, h, aColor, hColor, g.sp, g.ou, "經 ESPN 取得 DraftKings 的賭盤概況，這場已開賽，盤口定案在開賽前最後記錄的數字")) {
+      card.hidden = false;
+      return;
+    }
     $("odds-body").innerHTML = '<p class="odds-msg">載入中…</p>';
     $("odds-note").textContent = "";
     card.hidden = false;
     var fail = function (msg) {
       if (token !== oddsToken) return;
+      // 即時盤口抓不到（還沒開出盤口、ESPN 暫時抓不到），有記下來的就先顯示那份
+      if (hasRec && drawOdds(a, h, aColor, hColor, g.sp, g.ou, "經 ESPN 取得 DraftKings 的賭盤概況，目前抓不到即時盤口，這是最近一次記錄的盤口")) return;
       $("odds-body").innerHTML = '<p class="odds-msg">' + msg + "</p>";
       $("odds-note").textContent = "";
     };
@@ -779,6 +793,7 @@
     var el = document.createElement(clickable ? "a" : "div");
     el.className = "game" + (clickable ? "" : " is-static");
     if (clickable) el.href = gameHash(g, date);
+    if ((g.s === "S" || g.s === "L") && a && h) el.setAttribute("data-live", g.a + "_" + g.h);  // 賽程區的即時比分：開打後就用這個找到要更新的卡片
 
     var tags = (g.tag ? '<span class="game-tag">' + g.tag + "</span>" : "") +
       (g.n && a && h ? '<span class="game-tag">中立場地</span>' : "");
@@ -859,6 +874,72 @@
         jump.onclick = function () { goDate(next); };
       }
     }
+    startLive(date);
+  }
+
+  // ---------- 賽程區的即時比分 ----------
+  // 比賽開打後，賽程卡片中間改顯示即時比分和第幾節、剩幾分鐘（資料來自 ESPN 賽事列表，每 30 秒更新一次，只在開著賽程分頁時更新）。
+  // 只改畫面，不寫進資料檔；ESPN 說打完了但我們的資料還沒更新時，先顯示最終比分，更新資料後才會有預測對錯
+  var liveTimer = null;
+
+  function stopLive() {
+    if (liveTimer) { clearInterval(liveTimer); liveTimer = null; }
+  }
+
+  function startLive(date) {
+    stopLive();
+    var t = todayTW();
+    if (date < addDays(t, -1) || date > addDays(t, 1)) return;  // 離今天太遠的日子不會有進行中的比賽
+    if (!document.querySelector("#game-list [data-live]")) return;
+    liveTick(date);
+    liveTimer = setInterval(function () { if (!document.hidden) liveTick(date); }, 30000);
+  }
+
+  function livePeriod(st) {  // 第幾節 / 剩餘時間；回傳 [上一行, 下一行]
+    var p = st.period || 1;
+    var lab = p > 4 ? "延長 " + (p - 4) : "第 " + p + " 節";
+    var name = st.type.name;
+    if (name === "STATUS_HALFTIME") return ["中場", ""];
+    if (name === "STATUS_END_PERIOD") return [lab, "結束"];
+    return [lab, st.displayClock || ""];
+  }
+
+  function liveMid(e) {  // 一場比賽的中間欄：比分（領先的那隊加粗，箭頭指向領先方）+ 第幾節 / 已完賽
+    var sc = { away: 0, home: 0 };
+    e.competitions[0].competitors.forEach(function (c) { sc[c.homeAway] = Number(c.score) || 0; });
+    var final = e.status.type.name === "STATUS_FINAL";
+    var lead = sc.home > sc.away ? "home" : sc.away > sc.home ? "away" : null;
+    var per = livePeriod(e.status);
+    return '<div class="gm-score"><span class="gm-pts ' + (lead === "home" ? "lose" : "win") + '">' + sc.away + "</span>" +
+      '<span class="gm-final' + (final ? "" : " live") + '"><b>' + (lead === "home" ? "▶" : lead === "away" ? "◀" : "＝") + "</b>" +
+      (final ? "已完賽" : per[0] + (per[1] ? "<br>" + per[1] : "")) + "</span>" +
+      '<span class="gm-pts ' + (lead === "away" ? "lose" : "win") + '">' + sc.home + "</span></div>";
+  }
+
+  function liveTick(date) {
+    var games = (gamesByDate[date] || []).filter(function (g) { return g.s === "S" || g.s === "L"; });
+    // 還沒有任何一場開打（或 10 分鐘內要開打）就不用去問 ESPN
+    var soon = games.some(function (g) { return Date.now() >= new Date(g.d + "T" + g.t + ":00+08:00").getTime() - 600000; });
+    if (!soon) return;
+    Promise.all([fetchScoreboard(addDays(date, -1), 20000), fetchScoreboard(date, 20000)]).then(function (days) {
+      if (curDate !== date || $("view-schedule").hidden) return;  // 使用者已經換日期或離開賽程了
+      var byPair = {};
+      days[0].concat(days[1]).forEach(function (e) {
+        var comp = e.competitions && e.competitions[0];
+        if (!comp) return;
+        var n = {};
+        comp.competitors.forEach(function (c) { n[c.homeAway] = ESPN_NAME_FIX[c.team.displayName] || c.team.displayName; });
+        byPair[n.away + "|" + n.home] = e;
+      });
+      document.querySelectorAll("#game-list [data-live]").forEach(function (el) {
+        var k = el.getAttribute("data-live").split("_");
+        var e = byPair[ABBR[k[0]] + "|" + ABBR[k[1]]];
+        var name = e && e.status.type.name;
+        if (!e || name === "STATUS_SCHEDULED" || name === "STATUS_POSTPONED" || name === "STATUS_CANCELED") return;  // 還沒開打 / 延期：維持原樣
+        var mid = el.querySelector(".gm-mid");
+        if (mid) mid.innerHTML = liveMid(e);
+      });
+    }, function () { /* 這次抓不到就維持畫面原樣，30 秒後再試 */ });
   }
 
   function goDate(d) {  // 使用者在賽程裡換日期：不新增瀏覽紀錄，這樣「上一頁」從對戰畫面會回到對的那一天
@@ -1058,6 +1139,7 @@
       $("view-" + v).hidden = v !== name;
       $("tab-" + v).setAttribute("aria-current", v === name ? "page" : "false");
     });
+    if (name !== "schedule") stopLive();  // 離開賽程就不用再更新即時比分
     $("tabs").hidden = !hasUpcoming() || name === "home";  // 首頁自己就是選單，不再顯示分頁列
   }
 

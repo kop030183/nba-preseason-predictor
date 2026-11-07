@@ -254,8 +254,8 @@ def build_schedule(raw_dir):
             "s": s, "n": g["neutral"], "tag": SCHEDULE_TAGS.get(g["note"], g["note"]),
             "as": g["away_pts"], "hs": g["home_pts"],
         }
-        rec = odds.get(g["id"]) if s == "F" else None
-        if rec:  # 已完賽比賽的收盤盤口：sp = 主隊讓分、ou = 總分（網頁已完賽預測頁顯示用；開盤和賠率留在 raw/ 的紀錄檔）
+        rec = odds.get(g["id"]) if s in ("F", "S", "L") else None
+        if rec:  # 記下來的盤口：sp = 主隊讓分、ou = 總分（已完賽預測頁、已開賽的比賽顯示用，ESPN 開賽後就不給盤口了；開盤和賠率留在 raw/ 的紀錄檔）
             item["sp"], item["ou"] = rec["spread_home"][1], rec["total"][1]
         games.append(item)
     games.sort(key=lambda x: (x["d"], x["t"], x["a"] or "", x["h"] or ""))

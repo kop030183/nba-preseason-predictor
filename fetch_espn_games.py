@@ -22,7 +22,7 @@ import json
 import sys
 import time
 import urllib.request
-from datetime import date, datetime, timedelta
+from datetime import date, datetime, timedelta, timezone
 from pathlib import Path
 
 sys.dont_write_bytecode = True  # 別在專案資料夾留下 __pycache__
@@ -35,6 +35,7 @@ BOX_FILE = RAW / "boxscores_2026-27.json"
 SCHEDULE_FILE = RAW / "schedule_2026-27.json"
 ODDS_FILE = RAW / "odds_2026-27.json"  # 已完賽比賽的賭盤紀錄（開盤與收盤）
 PLAYERS_FILE = RAW / "players_2026-27.json"  # 已完賽比賽的逐場球員數據
+PRE_HOURS = 48  # 未來幾小時內要開賽的比賽，更新時就先記下目前的盤口（開賽後 ESPN 賽事列表就不給盤口了）
 SEASON_END = date(2027, 4, 11)  # 例行賽最後一天（美東日期）
 # 賽程從哪個美東日期開始抓：網頁賽程分頁最早能看的台灣日期（build_data.py 的 SCHEDULE_SHOW_FROM）
 # 要往前推一天，因為台灣日期通常是美東日期的隔天（2026-11-03 台灣 = 美東 11/2 的比賽）
@@ -221,21 +222,43 @@ def odds_of_game(event_id):
 
 
 def write_odds():
-    """已完賽比賽的賭盤紀錄 -> raw/odds_2026-27.json（以 ESPN 事件編號為鍵，增量：記過的不重抓）。
-    ESPN 賽事列表在比賽打完後會把盤口拿掉，所以趁還查得到時存下來，網頁已完賽的預測頁就從這裡讀。"""
+    """賭盤紀錄 -> raw/odds_2026-27.json（以 ESPN 事件編號為鍵）。
+    ESPN 賽事列表一開打就把盤口拿掉，網頁即時抓不到，所以趁還查得到時存下來：
+      st = "pre"   還沒開賽、未來 PRE_HOURS 小時內要開打的比賽：每次更新都重抓，最後一次更新就是「開賽前最後記錄的盤口」
+      st = "live"  進行中的比賽：只在還沒有紀錄時存一次（單場資料裡的盤口仍是開賽前的收盤盤口），不會蓋掉上面的 pre
+      st = "final" 已完賽：單場資料裡的收盤盤口最可靠，會蓋掉 pre / live，之後不再重抓
+    舊版紀錄沒有 st，視為 final（以前只存已完賽的）。網頁開賽後就改顯示這裡的盤口，已完賽預測頁也從這裡讀。"""
     if not SCHEDULE_FILE.exists():
         return
     cache = json.loads(ODDS_FILE.read_text(encoding="utf-8")) if ODDS_FILE.exists() else {}
+    now = datetime.now(timezone.utc).replace(tzinfo=None)  # 現在的 UTC 時間（和賽程裡的 utc 欄位同一種）
     new = missing = 0
     for g in json.loads(SCHEDULE_FILE.read_text(encoding="utf-8")):
-        if g["status"] != "STATUS_FINAL" or not g["away"] or not g["home"] or g["id"] in cache:
+        if not g["away"] or not g["home"]:
             continue
+        old = cache.get(g["id"])
+        status = g["status"]
+        if status == "STATUS_FINAL":
+            if old and old.get("st", "final") == "final":
+                continue
+            st = "final"
+        elif status == "STATUS_SCHEDULED":
+            hours = (datetime.strptime(g["utc"], "%Y-%m-%dT%H:%MZ") - now).total_seconds() / 3600
+            if not -1 <= hours <= PRE_HOURS:  # 太遠的比賽盤口還會變，不存；剛過開賽時間但狀態還沒更新的也算
+                continue
+            st = "pre"
+        elif "POSTPONED" in status or "CANCELED" in status:
+            continue
+        else:  # 進行中（含中場、節間休息）
+            if old:
+                continue
+            st = "live"
         rec = odds_of_game(g["id"])
         time.sleep(0.3)
         if rec is None:
             missing += 1  # 這場查不到盤口：不存，下次更新再試
             continue
-        cache[g["id"]] = {"utc": g["utc"], "away": g["away"], "home": g["home"], **rec}
+        cache[g["id"]] = {"utc": g["utc"], "away": g["away"], "home": g["home"], "st": st, **rec}
         new += 1
     ordered = sorted(cache.items(), key=lambda kv: (kv[1]["utc"], kv[0]))
     ODDS_FILE.write_text("{\n" + ",\n".join(f'"{k}": {json.dumps(v, ensure_ascii=False)}' for k, v in ordered) + "\n}\n",
