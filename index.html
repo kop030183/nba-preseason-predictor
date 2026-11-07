@@ -26,8 +26,7 @@
       window.nbaMarkTheme();
       window.dispatchEvent(new Event("nba-theme"));  // app.js 聽到會重畫（隊色、投票條要跟著主題重算）
     });
-    document.addEventListener("DOMContentLoaded", window.nbaMarkTheme);
-  </script>
+    document.addEventListener("DOMContentLoaded", window.nbaMarkTheme);  </script>
 </head>
 <body>
   <main class="wrap">
@@ -80,6 +79,7 @@
 
       <a class="home-card home-vote" id="home-vote" href="#tab=vote" hidden>
         <span class="home-title">🗳️ 投票專區</span>
+        <span class="home-desc">要當作 pop cat 按也可以</span>
       </a>
 
       <!-- 傷病名單：點開後選東區 / 西區，每隊一列，再點隊伍展開那隊的傷病（即時從 ESPN 抓，點開才抓） -->

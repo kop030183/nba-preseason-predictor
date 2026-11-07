@@ -377,7 +377,7 @@ a.game:hover { border-color: var(--accent); }
 /* 仿 NBA 官網：客隊在左、主隊在右，中間是開賽時間或比分 */
 .gm-tags { display: flex; justify-content: center; gap: 6px; flex-wrap: wrap; margin-bottom: 8px; }
 .gm-row { display: grid; grid-template-columns: minmax(0, 1fr) 11rem minmax(0, 1fr); align-items: center; gap: 8px; }  /* 中間欄固定寬度：不管顯示開賽時間、即時比分或最終比分，兩隊的位置每張卡都對齊 */
-@media (max-width: 420px) { .gm-row { grid-template-columns: minmax(0, 1fr) 9.5rem minmax(0, 1fr); } .gm-score { gap: 6px; } }
+@media (max-width: 420px) { .gm-row { grid-template-columns: minmax(0, 1fr) 9.5rem minmax(0, 1fr); } .gm-score { gap: 10px; } }
 .gm-team { min-width: 0; text-align: center; }
 .gm-name { margin-top: 4px; font-size: 1rem; font-weight: 700; overflow-wrap: anywhere; }
 .gm-rec { color: var(--muted); font-size: .8rem; font-variant-numeric: tabular-nums; }
@@ -387,13 +387,14 @@ a.game:hover { border-color: var(--accent); }
 .gm-mid:has(.gm-conf) .game-time { position: relative; top: 11px; }  /* 時間下面有信心時，整塊會被撐高、時間偏上：視覺下移，回到和沒有信心的卡片同樣的高度（兩側球隊那一欄的正中間） */
 .gm-sub { color: var(--muted); font-size: .75rem; }
 .gm-sub.live { color: var(--accent); font-weight: 600; }
-.gm-score { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 10px; }  /* 兩邊比分各佔一半寬，中間的「已完賽」才會永遠在正中央（119 和 80 位數不同也一樣） */
+.gm-score { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr); align-items: center; gap: 18px; }  /* gap：比分和中間「箭頭＋已完賽」的距離（電腦、一般手機；很窄的手機在下面改小） */  /* 兩邊比分各佔一半寬，中間的「已完賽」才會永遠在正中央（119 和 80 位數不同也一樣） */
 .gm-score > :first-child { text-align: right; white-space: nowrap; }
 .gm-score > :last-child { text-align: left; white-space: nowrap; }
 .gm-pts { font-size: 1.8rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
 @media (max-width: 420px) { .gm-pts { font-size: 1.45rem; } .gm-pts.pred { font-size: 1.15rem; } }  /* 手機：三位數比分（119）才放得進中間欄，不會貼到隊名 */
 @media (max-width: 360px) {  /* 更窄的手機：中間欄、比分、隊名再縮一點，四個字的隊名（塞爾提克）才不會斷成兩行 */
   .gm-row { grid-template-columns: minmax(0, 1fr) 8.5rem minmax(0, 1fr); gap: 4px; }
+  .gm-score { gap: 6px; }
   .gm-pts { font-size: 1.3rem; }
   .gm-pts.pred { font-size: 1.05rem; }
   .gm-name { font-size: .85rem; }
@@ -405,8 +406,9 @@ a.game:hover { border-color: var(--accent); }
 .gm-final.live { color: var(--accent); font-weight: 700; }  /* 即時比分：第幾節、剩餘時間用主色 */
 .gm-final.live b { color: var(--accent); }
 /* 預測正確/失敗：脫離排版（absolute），不然會把「箭頭 + 已完賽」往上擠；箭頭、已完賽才能跟兩側比分在同一條水平線上。top 讓它落在兩側戰績那一行 */
-.gm-final { position: relative; }
-.gm-res { display: block; position: absolute; left: 50%; transform: translateX(-50%); top: calc(100% + 2px); font-size: .85rem; white-space: nowrap; }  /* left 50% + 往左退自己一半寬 = 不管字比「已完賽」寬多少，都正中間 */
+.game { position: relative; }
+.game:has(.gm-res):not(:has(.gm-tags)) { padding-top: 36px; }  /* 沒有標籤列（如「NBA 盃小組賽」）的已完賽卡片，上面留一排空間給右上角的預測正確/失敗，不然會貼到隊徽 */
+.gm-res { display: block; position: absolute; top: 10px; right: 14px; font-size: .85rem; white-space: nowrap; }  /* 預測正確/失敗：放在整張卡片的右上角，不佔中間的位置，箭頭和已完賽才能和比分對齊 */
 .mini-badge {
   display: inline-block;
   min-width: 42px; padding: 1px 8px;
