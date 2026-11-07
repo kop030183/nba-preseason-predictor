@@ -285,6 +285,7 @@
     $("vote-card").hidden = true;  // 投票卡片也一樣，算完才打開
     $("inj-card").hidden = true;   // 傷病名單也一樣
     $("players-card").hidden = true;  // 得分前三球員也一樣
+    $("picks-card").hidden = true;    // 依預測選擇：盤口畫出來才會打開
     $("picker").hidden = pregame;  // 已完賽的比賽是固定頁面，不能換隊
     $("board-card").hidden = pregame;
     $("pre-board").hidden = !pregame;
@@ -315,6 +316,7 @@
     var cmp = MODEL ? compareModels(a, h, neutral) : null;
     var pace = MODEL ? cmp.p1 : predictPace(a, h, neutral ? 0 : null);
     var wPace = winnerOf(pace);
+    curPace = pace;  // 「依預測選擇」要用這次的預測比分
 
     // 主記分板
     // 任一隊連勝超過 3 場，兩隊都留出隊徽上方那一行（沒連勝的留白），隊徽才不會一高一低
@@ -435,6 +437,37 @@
   function sgn(v) { return (v > 0 ? "+" : "") + f1(v); }          // 讓分顯示：+1.5 / -1.5
   function half(v) { return f1(Math.floor(v) + 0.5); }             // 單隊總分調成 .5 結尾（x.0 進位到 x.5）
 
+  // 依預測選擇：照我們預測的比分，對著現在的盤口會選哪些選項（贏的一方、讓分選哪邊、單隊總分和總分選大或小）。
+  // 預測比分用畫面上顯示的 0.1 位數；剛好等於盤口的不選。只在還沒完賽的比賽顯示（已完賽的看賽前預測那張卡）
+  var curPace = null;  // 目前頁面的預測比分 { away, home }（render 設定）
+
+  function renderPicks(a, h, aColor, hColor, homeLine, totalLine) {
+    var card = $("picks-card");
+    if (!curPace || (homeLine == null && totalLine == null)) { card.hidden = true; return; }
+    var r1 = function (v) { return Math.round(v * 10) / 10; };  // 避開小數誤差（226.2 不要變成 226.20000000000002）
+    var pa = Number(f1(curPace.away)), ph = Number(f1(curPace.home));
+    var tint = function (color, text) { return '<div style="color:' + color + '">' + text + "</div>"; };
+    var lines = [];
+    var homeWins = curPace.home >= curPace.away;  // 和預測勝方的判斷一致（平手算主隊）
+    lines.push(tint(homeWins ? hColor : aColor, (homeWins ? h : a).zh + " 贏"));
+    if (homeLine != null) {
+      var pick = r1(ph - pa + homeLine);  // > 0 選主隊那邊，< 0 選客隊那邊
+      if (pick > 0) lines.push(tint(hColor, h.zh + " " + sgn(homeLine)));
+      else if (pick < 0) lines.push(tint(aColor, a.zh + " " + sgn(-homeLine)));
+    }
+    var overUnder = function (name, color, pred, line) {
+      if (r1(pred) === line) return;
+      lines.push(tint(color, name + " " + line + (pred > line ? " ⬆️" : " ⬇️")));
+    };
+    if (homeLine != null && totalLine != null) {
+      overUnder(a.zh, aColor, pa, Number(half(totalLine / 2 + homeLine / 2)));
+      overUnder(h.zh, hColor, ph, Number(half(totalLine / 2 - homeLine / 2)));
+    }
+    if (totalLine != null) overUnder("總分", "var(--text)", pa + ph, totalLine);
+    card.innerHTML = '<div class="odds-title">依預測選擇</div><div class="pick-list">' + lines.join("") + "</div>";
+    card.hidden = false;
+  }
+
   function drawOdds(a, h, aColor, hColor, homeLine, totalLine, note, res) {
     var UP = " ⬆️", DOWN = " ⬇️", OK = " ✅";
     var overUnder = function (actual, line) { return actual > line ? UP : actual < line ? DOWN : ""; };
@@ -456,6 +489,8 @@
     $("odds-body").innerHTML = '<div class="odds-title">' + (res ? "賭盤結果" : "賭盤") + '</div><table class="stats"><thead><tr><th style="color:' + aColor + '">' + a.zh +
       '</th><th></th><th style="color:' + hColor + '">' + h.zh + "</th></tr></thead><tbody>" + rows + "</tbody></table>";
     $("odds-note").innerHTML = note + "<br>非投注建議，娛樂參考 !";
+    if (res) $("picks-card").hidden = true;
+    else renderPicks(a, h, aColor, hColor, homeLine, totalLine);
     return true;
   }
 
