@@ -8,13 +8,17 @@
   --text: #1c1a15;
   --muted: #5f5b4f;
   --line: #d4ccb6;
-  --accent: #e8590c;
-  --accent-soft: #fff0e6;
-  --accent2: #f59f00;
+  --accent: #8f7125;  /* 卡其系的重點色（深卡其／土金），按鈕、標籤、連結都用它 */
+  --accent-soft: #efe7cc;
+  --accent2: #b8995a;
   --cold: #1c7ed6;
   --win: #0b7a3b;
   --bad: #c62828;
   color-scheme: light;
+}
+/* 卡其的按鈕：用淺一點的卡其（字用深色）；文字用的重點色維持較深才看得清楚。只給「沒選過主題、系統是淺色」和「卡其」用，其他主題不受影響 */
+@media (not (prefers-color-scheme: dark)) {
+  :root:not([data-theme]) { --btn-a: #cdb673; --btn-b: #e6d8a8; --btn-text: #2a2008; --glow-rgb: 143, 113, 37; }
 }
 
 @media (prefers-color-scheme: dark) {
@@ -24,9 +28,11 @@
     --text: #eceff4;
     --muted: #9aa3b2;
     --line: #1f242d;
-    --accent: #ff8a3d;
-    --accent-soft: #2a1d12;
-    --accent2: #ffd43b;
+    --btn-a: #2d323c; --btn-b: #474f5d; --btn-text: #eceff4;  /* 按鈕：炭灰（黑色主題） */
+    --accent: #f2f4f8;
+    --accent-soft: #1b1e24;
+    --accent2: #8a929f;
+    --glow-rgb: 255, 255, 255;
     --cold: #74c0fc;
     --win: #4cd387;
     --bad: #ff6b6b;
@@ -36,32 +42,44 @@
 
 :root[data-theme="khaki"] {
   --bg: #e9e4d4; --surface: #f4f0e4; --text: #1c1a15; --muted: #5f5b4f; --line: #d4ccb6;
-  --accent: #e8590c; --accent-soft: #fff0e6; --accent2: #f59f00; --cold: #1c7ed6; --win: #0b7a3b; --bad: #c62828;
+  --accent: #8f7125; --accent-soft: #efe7cc; --accent2: #b8995a;
+  --btn-a: #cdb673; --btn-b: #e6d8a8; --btn-text: #2a2008; --cold: #1c7ed6; --win: #0b7a3b; --bad: #c62828;
+  --glow-rgb: 143, 113, 37;
   color-scheme: light;
 }
 :root[data-theme="white"] {
   --bg: #f4f5f7; --surface: #ffffff; --text: #15181e; --muted: #5d6573; --line: #dfe2e8;
-  --accent: #e8590c; --accent-soft: #fff0e6; --accent2: #f59f00; --cold: #1c7ed6; --win: #0b7a3b; --bad: #c62828;
+  --accent: #20242c; --accent-soft: #eceef2; --accent2: #6b7380; --cold: #1c7ed6; --win: #0b7a3b; --bad: #c62828;  /* 黑白灰：重點色用近黑 */
+  --btn-a: #d3d8e0; --btn-b: #eceff3; --btn-text: #15181e;  /* 按鈕：淺灰銀（白色主題） */
+  --glow-rgb: 32, 36, 44;
   color-scheme: light;
 }
 :root[data-theme="pink"] {
   --bg: #fbeef2; --surface: #fef6f8; --text: #2b1a21; --muted: #7d5a68; --line: #f2dde5;
   --accent: #dc5083; --accent-soft: #fdedf2; --accent2: #f397b6; --cold: #1c7ed6; --win: #0b7a3b; --bad: #c62828;
+  --glow-rgb: 220, 80, 131;
+  --btn-a: #f2b3c8; --btn-b: #f9d3e0; --btn-text: #4a1730;  /* 按鈕：淡粉（字用深酒紅） */
   color-scheme: light;
 }
 :root[data-theme="blue"] {
   --bg: #eaf3fb; --surface: #f6fafe; --text: #14202b; --muted: #50677b; --line: #d3e3f1;
   --accent: #2b7bc2; --accent-soft: #e4f0fb; --accent2: #6fb1e6; --cold: #1c7ed6; --win: #0b7a3b; --bad: #c62828;
+  --glow-rgb: 43, 123, 194;
+  --btn-a: #a8cdee; --btn-b: #d0e5f7; --btn-text: #10304f;  /* 按鈕：淡藍（字用深藍） */
   color-scheme: light;
 }
 :root[data-theme="black"] {
   --bg: #06080b; --surface: #0a0c10; --text: #eceff4; --muted: #9aa3b2; --line: #1f242d;
-  --accent: #ff8a3d; --accent-soft: #2a1d12; --accent2: #ffd43b; --cold: #74c0fc; --win: #4cd387; --bad: #ff6b6b;
+  --accent: #f2f4f8; --accent-soft: #1b1e24; --accent2: #8a929f; --cold: #74c0fc; --win: #4cd387; --bad: #ff6b6b;  /* 黑白灰：重點色用近白 */
+  --btn-a: #2d323c; --btn-b: #474f5d; --btn-text: #eceff4;  /* 按鈕：炭灰（黑色主題） */
+  --glow-rgb: 255, 255, 255;
   color-scheme: dark;
 }
 :root[data-theme="dark"] {
   --bg: #0f1218; --surface: #181c25; --text: #eceff4; --muted: #9aa3b2; --line: #2a303c;
-  --accent: #ff8a3d; --accent-soft: #2a1d12; --accent2: #ffd43b; --cold: #74c0fc; --win: #4cd387; --bad: #ff6b6b;
+  --accent: #eef1f6; --accent-soft: #252b36; --accent2: #98a1b0; --cold: #74c0fc; --win: #4cd387; --bad: #ff6b6b;  /* 黑白灰：重點色用近白 */
+  --btn-a: #3a4457; --btn-b: #5a6579; --btn-text: #f1f4f9;  /* 按鈕：石板灰藍（深色主題） */
+  --glow-rgb: 255, 255, 255;
   color-scheme: dark;
 }
 
@@ -198,17 +216,26 @@ a.home-card:hover, a.home-card:focus-visible { border-color: var(--accent); tran
   padding: 22px 20px 20px;
   background: linear-gradient(135deg, var(--accent-soft), var(--surface));
   border-color: var(--accent);
-  box-shadow: 0 8px 24px rgba(232, 89, 12, .18);
+  box-shadow: 0 8px 24px rgba(var(--glow-rgb, 232, 89, 12), .18);  /* 光暈顏色跟著主題的重點色走 */
 }
 .home-main { position: relative; }
 .home-btns { position: absolute; top: 22px; right: 20px; display: flex; gap: 8px; }  /* 右上角的按鈕們：今日賽果、明日賽程 */
 .home-result {
   padding: 7px 14px; white-space: nowrap; border-radius: 999px;
   font-size: .85rem; font-weight: 800; text-decoration: none;
-  color: #1a1206;
-  background: linear-gradient(90deg, var(--accent), var(--accent2));
-  box-shadow: 0 3px 10px rgba(232, 89, 12, .3);
+  color: var(--btn-text, #1a1206);
+  background: linear-gradient(90deg, var(--btn-a, var(--accent)), var(--btn-b, var(--accent2)));
+  box-shadow: 0 3px 10px rgba(var(--glow-rgb, 232, 89, 12), .3);
   transition: transform .15s;
+}
+/* 黑白灰三個主題（白色、深色、黑色）：賽程大卡片跟下面其他卡片一樣，不要特別亮的邊框和光暈，按鈕也只留一點點陰影 */
+:root[data-theme="white"] .home-main, :root[data-theme="dark"] .home-main, :root[data-theme="black"] .home-main {
+  background: linear-gradient(160deg, var(--surface), var(--bg)); border-color: var(--line); box-shadow: 0 4px 14px rgba(0, 0, 0, .12);
+}
+:root[data-theme="white"] .home-result, :root[data-theme="dark"] .home-result, :root[data-theme="black"] .home-result { box-shadow: 0 2px 6px rgba(0, 0, 0, .25); }
+@media (prefers-color-scheme: dark) {  /* 沒選過主題、系統是深色 = 黑色主題，同樣處理 */
+  :root:not([data-theme]) .home-main { background: linear-gradient(160deg, var(--surface), var(--bg)); border-color: var(--line); box-shadow: 0 4px 14px rgba(0, 0, 0, .12); }
+  :root:not([data-theme]) .home-result { box-shadow: 0 2px 6px rgba(0, 0, 0, .25); }
 }
 @media (max-width: 420px) { .home-btns { top: 20px; right: 14px; gap: 6px; } .home-result { padding: 6px 10px; font-size: .78rem; } }  /* 手機：兩顆按鈕縮小，才不會貼到左邊的「賽程」 */
 .home-result:hover, .home-result:focus-visible { transform: translateY(-1px); outline: 3px solid var(--accent); outline-offset: 2px; }
@@ -308,7 +335,7 @@ a.home-card:hover, a.home-card:focus-visible { border-color: var(--accent); tran
 .st-head h2 { margin: 0; }
 .seg { display: inline-flex; padding: 3px; gap: 3px; background: var(--bg); border: 1px solid var(--line); border-radius: 999px; }
 .seg-btn { font: inherit; font-size: .9rem; font-weight: 700; padding: 6px 18px; color: var(--muted); background: transparent; border: 0; border-radius: 999px; cursor: pointer; }
-.seg-btn[aria-pressed="true"] { color: #fff; background: linear-gradient(90deg, var(--accent), var(--accent2)); }
+.seg-btn[aria-pressed="true"] { color: var(--btn-text, #fff); background: linear-gradient(90deg, var(--btn-a, var(--accent)), var(--btn-b, var(--accent2))); }
 .seg-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .st-table th, .st-table td { padding: 8px 4px; }
 .st-table th:nth-child(2), .st-table td:nth-child(2) { text-align: left; }
