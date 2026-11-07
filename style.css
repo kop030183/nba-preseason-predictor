@@ -1,5 +1,5 @@
-/* 四種主題：白色、卡其、深色、黑色。沒選過就跟著手機/電腦的淺色深色設定（淺色 = 卡其、深色 = 黑色）；
-   選過就用 <html data-theme="white|khaki|dark|black"> 蓋過去（選擇記在瀏覽器 localStorage） */
+/* 六種主題：白色、卡其、粉色、淺藍、深色、黑色。沒選過就跟著手機/電腦的淺色深色設定（淺色 = 卡其、深色 = 黑色）；
+   選過就用 <html data-theme="white|khaki|pink|blue|dark|black"> 蓋過去（選擇記在瀏覽器 localStorage） */
 :root {
   --radius: 14px;
   /* 卡其（預設淺色） */
@@ -44,6 +44,16 @@
   --accent: #e8590c; --accent-soft: #fff0e6; --accent2: #f59f00; --cold: #1c7ed6; --win: #0b7a3b; --bad: #c62828;
   color-scheme: light;
 }
+:root[data-theme="pink"] {
+  --bg: #fbeef2; --surface: #fef6f8; --text: #2b1a21; --muted: #7d5a68; --line: #f2dde5;
+  --accent: #dc5083; --accent-soft: #fdedf2; --accent2: #f397b6; --cold: #1c7ed6; --win: #0b7a3b; --bad: #c62828;
+  color-scheme: light;
+}
+:root[data-theme="blue"] {
+  --bg: #eaf3fb; --surface: #f6fafe; --text: #14202b; --muted: #50677b; --line: #d3e3f1;
+  --accent: #2b7bc2; --accent-soft: #e4f0fb; --accent2: #6fb1e6; --cold: #1c7ed6; --win: #0b7a3b; --bad: #c62828;
+  color-scheme: light;
+}
 :root[data-theme="black"] {
   --bg: #06080b; --surface: #0a0c10; --text: #eceff4; --muted: #9aa3b2; --line: #1f242d;
   --accent: #ff8a3d; --accent-soft: #2a1d12; --accent2: #ffd43b; --cold: #74c0fc; --win: #4cd387; --bad: #ff6b6b;
@@ -67,8 +77,16 @@
 .tp-btn[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); font-weight: 700; }
 .tp-btn:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .tp-dot { width: 14px; height: 14px; border-radius: 50%; border: 1px solid rgba(128, 128, 128, .55); }
+@media (max-width: 420px) {  /* 手機：六個按鈕要擠在同一排，圓點改放在字的上面（按鈕變窄），間距也縮小 */
+  .theme-pick { gap: 4px; }
+  .theme-pick .tp-label { margin-right: 0; font-size: .8rem; }
+  .tp-btn { flex-direction: column; gap: 3px; font-size: .78rem; line-height: 1.1; padding: 6px 8px 5px; border-radius: 16px; }
+  .tp-dot { width: 14px; height: 14px; }
+}
 .tp-btn[data-t="white"] .tp-dot { background: #ffffff; }
 .tp-btn[data-t="khaki"] .tp-dot { background: #e9e4d4; }
+.tp-btn[data-t="pink"] .tp-dot { background: #f7dbe5; }  /* 小圓點比實際底色再深一點點，才看得出是粉色 */
+.tp-btn[data-t="blue"] .tp-dot { background: #cfe3f5; }
 .tp-btn[data-t="dark"] .tp-dot { background: #181c25; }
 .tp-btn[data-t="black"] .tp-dot { background: #06080b; }
 

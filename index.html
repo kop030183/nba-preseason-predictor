@@ -9,7 +9,7 @@
   <script>
     // 主題：邏輯放在網頁檔自己裡面（不放在 app.js），這樣就算手機還留著舊的 app.js，主題按鈕也一定點得動
     // 之前選過的主題：在畫面出來之前先套上，才不會先閃一下預設顏色
-    try { var t = localStorage.getItem("nba-theme"); if (/^(white|khaki|dark|black)$/.test(t)) document.documentElement.setAttribute("data-theme", t); } catch (e) {}
+    try { var t = localStorage.getItem("nba-theme"); if (/^(white|khaki|pink|blue|dark|black)$/.test(t)) document.documentElement.setAttribute("data-theme", t); } catch (e) {}
     // 目前生效的主題：選過的，沒選過就跟系統（淺色 = 卡其、深色 = 黑色）；按鈕的亮起也在這裡處理
     window.nbaMarkTheme = function () {
       var cur = document.documentElement.getAttribute("data-theme") ||
@@ -37,6 +37,8 @@
         <span class="tp-label">主題</span>
         <button type="button" class="tp-btn" data-t="white" aria-pressed="false"><span class="tp-dot"></span>白色</button>
         <button type="button" class="tp-btn" data-t="khaki" aria-pressed="false"><span class="tp-dot"></span>卡其</button>
+        <button type="button" class="tp-btn" data-t="pink" aria-pressed="false"><span class="tp-dot"></span>粉色</button>
+        <button type="button" class="tp-btn" data-t="blue" aria-pressed="false"><span class="tp-dot"></span>淺藍</button>
         <button type="button" class="tp-btn" data-t="dark" aria-pressed="false"><span class="tp-dot"></span>深色</button>
         <button type="button" class="tp-btn" data-t="black" aria-pressed="false"><span class="tp-dot"></span>黑色</button>
       </div>
