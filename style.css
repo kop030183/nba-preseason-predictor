@@ -328,6 +328,13 @@ a.game:hover { border-color: var(--accent); }
 .gm-score > :first-child { text-align: right; white-space: nowrap; }
 .gm-score > :last-child { text-align: left; white-space: nowrap; }
 .gm-pts { font-size: 1.8rem; font-weight: 800; line-height: 1; font-variant-numeric: tabular-nums; }
+@media (max-width: 420px) { .gm-pts { font-size: 1.45rem; } .gm-pts.pred { font-size: 1.15rem; } }  /* 手機：三位數比分（119）才放得進中間欄，不會貼到隊名 */
+@media (max-width: 360px) {  /* 更窄的手機：中間欄、比分、隊名再縮一點，四個字的隊名（塞爾提克）才不會斷成兩行 */
+  .gm-row { grid-template-columns: minmax(0, 1fr) 8.5rem minmax(0, 1fr); gap: 4px; }
+  .gm-pts { font-size: 1.3rem; }
+  .gm-pts.pred { font-size: 1.05rem; }
+  .gm-name { font-size: .85rem; }
+}
 .gm-pts.win { color: var(--text); }
 .gm-pts.lose { color: var(--muted); font-weight: 600; }
 .gm-final { color: var(--muted); font-size: .72rem; line-height: 1.3; text-align: center; white-space: nowrap; }
