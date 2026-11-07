@@ -266,14 +266,23 @@
     if (!SCHEDULE || !PRE) return null;
     var d = isDate(date) ? date : PRE.date;
     for (var i = 0; i < SCHEDULE.games.length; i++) {
-      var g = SCHEDULE.games[i];
+      var g = withLive(SCHEDULE.games[i]);
       if (g.s === "F" && g.d === d && g.a === aAbbr && g.h === hAbbr && preGameInfo(g)) return g;
     }
     return null;
   }
 
   // 某場已完賽比賽「開打之前」的球隊數據：最近一個比賽日在 PRE，更早的在 PRE_DAYS
-  function snapshotOf(g) { return g.d === PRE.date ? PRE.teams : PRE_DAYS[g.d]; }
+  function snapshotOf(g) { return g.live ? T : g.d === PRE.date ? PRE.teams : PRE_DAYS[g.d]; }
+
+  // ESPN 說「打完了」、但我們的資料檔還沒更新的比賽：先記下最終比分，畫面上當成已完賽處理（賽前預測用目前的球隊數據算，因為這場還沒算進去）
+  // 更新資料之後這些比賽在賽程裡就是正式的已完賽，這份暫存就用不到了
+  var liveFinals = {};  // "日期|客隊|主隊" -> { as, hs }
+  function withLive(g) {
+    var f = liveFinals[g.d + "|" + g.a + "|" + g.h];
+    if (!f || (g.s !== "S" && g.s !== "L")) return g;
+    return Object.assign({}, g, { s: "F", as: f.as, hs: f.hs, live: true });
+  }
 
   function render() {
     var aKey = awaySel.value;
@@ -789,7 +798,7 @@
   // 最近一個比賽日的數據在 PRE，更早的比賽日在 PRE_DAYS
   function preGameInfo(g) {
     if (!PRE || g.s !== "F" || !g.a || !g.h) return null;
-    var teams = g.d === PRE.date ? PRE.teams : PRE_DAYS[g.d];
+    var teams = g.live ? T : g.d === PRE.date ? PRE.teams : PRE_DAYS[g.d];  // g.live：ESPN 剛說打完、資料還沒更新的比賽，球隊總表就還是開打前的數據
     if (!teams) return null;
     var a = teams[ABBR[g.a]];
     var h = teams[ABBR[g.h]];
@@ -886,16 +895,8 @@
     return li;
   }
 
-  function renderSchedule(date) {
-    curDate = date;
-    $("date-input").value = date;
-    $("date-prev").disabled = !prevMatchDay(date);
-    $("date-next").disabled = !nextMatchDay(date);
-    var games = gamesByDate[date] || [];
-    var list = $("game-list");
-    list.innerHTML = "";
-    games.forEach(function (g) { list.appendChild(gameItem(g, date)); });
-    // 當天已完賽、有賽前預測的比賽：預測正確幾場、預測失敗幾場（用大比分那個算法，和卡片上標的一樣）
+  // 當天已完賽、有賽前預測的比賽：預測正確幾場、預測失敗幾場（用大比分那個算法，和卡片上標的一樣）
+  function drawDaySummary(games) {
     var right = 0, wrong = 0;
     if (MODEL) games.forEach(function (g) {
       var pi = preGameInfo(g);
@@ -904,6 +905,18 @@
     var sum = $("day-summary");
     sum.hidden = right + wrong === 0;
     sum.innerHTML = '當天預測正確 <span class="ok">' + right + '</span> 場、預測失敗 <span class="bad">' + wrong + "</span> 場";
+  }
+
+  function renderSchedule(date) {
+    curDate = date;
+    $("date-input").value = date;
+    $("date-prev").disabled = !prevMatchDay(date);
+    $("date-next").disabled = !nextMatchDay(date);
+    var games = (gamesByDate[date] || []).map(withLive);
+    var list = $("game-list");
+    list.innerHTML = "";
+    games.forEach(function (g) { list.appendChild(gameItem(g, date)); });
+    drawDaySummary(games);
     $("game-empty").hidden = games.length > 0;
     if (!games.length) {
       $("game-empty-text").textContent = fmtDate(date) + "沒有比賽。";
@@ -977,6 +990,17 @@
         var e = byPair[ABBR[k[0]] + "|" + ABBR[k[1]]];
         var name = e && e.status.type.name;
         if (!e || name === "STATUS_SCHEDULED" || name === "STATUS_POSTPONED" || name === "STATUS_CANCELED") return;  // 還沒開打 / 延期：維持原樣
+        if (name === "STATUS_FINAL") {  // 打完了：整張卡換成已完賽的樣子（預測正確/失敗、賽前預測比分，點進去是完賽頁）
+          var sc = {};
+          e.competitions[0].competitors.forEach(function (c) { sc[c.homeAway] = Number(c.score) || 0; });
+          liveFinals[date + "|" + k[0] + "|" + k[1]] = { as: sc.away, hs: sc.home };
+          var gm = (gamesByDate[date] || []).filter(function (x) { return x.a === k[0] && x.h === k[1]; })[0];
+          if (gm && el.parentNode) {
+            el.parentNode.replaceWith(gameItem(withLive(gm), date));
+            drawDaySummary((gamesByDate[date] || []).map(withLive));
+            return;
+          }
+        }
         var mid = el.querySelector(".gm-mid");
         if (mid) mid.innerHTML = liveMid(e);
       });
@@ -1299,7 +1323,7 @@
     dayList = [];
     dayIdx = -1;
     if (fromDate && gamesByDate[fromDate]) {
-      dayList = gamesByDate[fromDate].filter(function (g) { return isClickable(g, fromDate); });
+      dayList = gamesByDate[fromDate].map(withLive).filter(function (g) { return isClickable(g, fromDate); });
       var a = T[awaySel.value].abbr;
       var h = T[homeSel.value].abbr;
       for (var i = 0; i < dayList.length; i++) if (dayList[i].a === a && dayList[i].h === h) dayIdx = i;
